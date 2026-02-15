@@ -8,6 +8,8 @@
 - `POST /v1/messages/count_tokens` (근사치)
 - `GET /v1/models`
 - provider별 모델 치환 (`MODEL_MAP_JSON`, `MODEL_MAP_FILE`, `provider:model` prefix 지원)
+- HTTP 엔진 선택: 기본 `node`, 옵션 `fastify` (`PIAI_HTTP_ENGINE=fastify`)
+- 요청 가드레일: `http.maxBodyBytes`, `http.requestTimeoutMs`
 
 ## 설치
 
@@ -42,12 +44,23 @@ cli ui
 
 ## 실행
 
+### 기본(Node HTTP) 엔진
+
 ```bash
 PI_API_KEY=... \
 PI_API=openai-codex-responses \
 PI_PROVIDER=openai-codex \
 PI_BASE_URL=https://chatgpt.com/backend-api \
 PI_MODEL=gpt-5.1-codex-mini \
+PORT=8787 \
+pnpm start
+```
+
+### Fastify 엔진(옵션)
+
+```bash
+PIAI_HTTP_ENGINE=fastify \
+PI_API_KEY=... \
 PORT=8787 \
 pnpm start
 ```
@@ -97,7 +110,8 @@ cli login openai-codex
     "enabled": true,
     "server": true,
     "conversation": true,
-    "dir": "./logs"
+    "dir": "./logs",
+    "maxQueueSize": 5000
   }
 }
 ```
@@ -106,6 +120,7 @@ cli login openai-codex
 - `server`: 서버 접근/에러 로그 on/off
 - `conversation`: 대화 요청/응답 로그 on/off
 - `dir`: 로그 폴더
+- `maxQueueSize`: 비동기 로그 큐 최대 길이 (초과 시 drop)
 
 생성 파일:
 - `server.log.jsonl`
@@ -118,6 +133,26 @@ PIAI_LOG_ENABLED=true
 PIAI_LOG_SERVER=true
 PIAI_LOG_CONVERSATION=false
 PIAI_LOG_DIR=./logs
+```
+
+## HTTP 가드레일
+
+설정 파일의 `http` 섹션으로 요청 바디 크기/타임아웃을 제어할 수 있습니다.
+
+```json
+{
+  "http": {
+    "maxBodyBytes": 1048576,
+    "requestTimeoutMs": 30000
+  }
+}
+```
+
+환경변수:
+
+```bash
+PIAI_MAX_BODY_BYTES=1048576
+PIAI_REQUEST_TIMEOUT_MS=30000
 ```
 
 ## Claude Code 설정 예시
