@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
 import { createGatewayLogger } from "./logger.js";
 import { createPiRunner } from "./pi-runner.js";
+import { createFastifyApp } from "./http/fastify-app.js";
 import { createAuthMiddleware } from "./http/auth-middleware.js";
 import { createCorsMiddleware } from "./http/cors-middleware.js";
 import { createErrorMiddleware } from "./http/error-middleware.js";
@@ -64,23 +65,62 @@ export function createServer(config, options = {}) {
 
 export function startServer(config = loadConfig()) {
   const logger = createGatewayLogger(config);
+
+  const engine =
+    typeof process.env.PIAI_HTTP_ENGINE === "string" && process.env.PIAI_HTTP_ENGINE.trim()
+      ? process.env.PIAI_HTTP_ENGINE.trim().toLowerCase()
+      : "node";
+
+  if (engine === "fastify") {
+    const app = createFastifyApp({ config, logger });
+    logger.server("server_start", {
+      port: config.port,
+      provider: config.provider || config.platform,
+      upstreamProvider: config.upstream.provider,
+      api: config.upstream.api,
+      engine: "fastify"
+    });
+
+    app.listen({ port: config.port, host: "0.0.0.0" }).then(() => {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[piai-gateway] listening on :${config.port} (engine=fastify, provider=${config.provider || config.platform}, upstream=${config.upstream.provider}/${config.upstream.api})`
+      );
+    });
+
+    app.server.on("close", () => {
+      logger.server("server_stop", {
+        port: config.port,
+        droppedLogs: typeof logger.getDroppedCount === "function" ? logger.getDroppedCount() : 0,
+        engine: "fastify"
+      });
+      if (typeof logger.close === "function") {
+        void logger.close();
+      }
+    });
+
+    return app.server;
+  }
+
   const server = createServer(config, { logger });
   logger.server("server_start", {
     port: config.port,
     provider: config.provider || config.platform,
     upstreamProvider: config.upstream.provider,
-    api: config.upstream.api
+    api: config.upstream.api,
+    engine: "node"
   });
   server.listen(config.port, () => {
     // eslint-disable-next-line no-console
     console.log(
-      `[piai-gateway] listening on :${config.port} (provider=${config.provider || config.platform}, upstream=${config.upstream.provider}/${config.upstream.api})`
+      `[piai-gateway] listening on :${config.port} (engine=node, provider=${config.provider || config.platform}, upstream=${config.upstream.provider}/${config.upstream.api})`
     );
   });
   server.on("close", () => {
     logger.server("server_stop", {
       port: config.port,
-      droppedLogs: typeof logger.getDroppedCount === "function" ? logger.getDroppedCount() : 0
+      droppedLogs: typeof logger.getDroppedCount === "function" ? logger.getDroppedCount() : 0,
+      engine: "node"
     });
     if (typeof logger.close === "function") {
       void logger.close();
