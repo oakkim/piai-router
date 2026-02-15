@@ -1,4 +1,5 @@
 import { readConfigFile, resolveConfigPath } from "./config-store.js";
+import { validateAndNormalizeConfig } from "./config-validate.js";
 
 const DEFAULT_PROVIDER = "openai-codex";
 
@@ -47,6 +48,10 @@ function defaultConfig() {
       server: true,
       conversation: true,
       dir: "./logs"
+    },
+    http: {
+      maxBodyBytes: 1024 * 1024,
+      requestTimeoutMs: 30_000
     },
     providers: {
       [provider]: upstream
@@ -209,6 +214,10 @@ function mergeConfigWithObject(config, candidate) {
     config.logging.dir = logging.dir.trim();
   }
 
+  const http = isRecord(candidate.http) ? candidate.http : {};
+  config.http.maxBodyBytes = parseNumber(http.maxBodyBytes, config.http.maxBodyBytes);
+  config.http.requestTimeoutMs = parseNumber(http.requestTimeoutMs, config.http.requestTimeoutMs);
+
   const providers = isRecord(candidate.providers) ? candidate.providers : {};
   for (const [rawProviderId, providerCandidate] of Object.entries(providers)) {
     if (!isRecord(providerCandidate)) {
@@ -331,6 +340,13 @@ function mergeConfigWithEnv(config, env) {
   } else if (env.LOG_DIR !== undefined && String(env.LOG_DIR).trim()) {
     config.logging.dir = String(env.LOG_DIR).trim();
   }
+
+  if (env.PIAI_MAX_BODY_BYTES !== undefined) {
+    config.http.maxBodyBytes = parseNumber(env.PIAI_MAX_BODY_BYTES, config.http.maxBodyBytes);
+  }
+  if (env.PIAI_REQUEST_TIMEOUT_MS !== undefined) {
+    config.http.requestTimeoutMs = parseNumber(env.PIAI_REQUEST_TIMEOUT_MS, config.http.requestTimeoutMs);
+  }
 }
 
 function finalizeConfig(config) {
@@ -390,5 +406,5 @@ export function loadConfig(env = process.env, options = {}) {
 
   finalizeConfig(config);
 
-  return { ...config, configPath };
+  return { ...validateAndNormalizeConfig(config), configPath };
 }

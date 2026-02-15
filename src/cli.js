@@ -150,6 +150,18 @@ function sanitizeConfigForDisplay(config) {
   };
 }
 
+function resolveHttpConfig(config) {
+  const source = isRecord(config?.http) ? config.http : {};
+  return {
+    maxBodyBytes:
+      typeof source.maxBodyBytes === "number" && source.maxBodyBytes > 0 ? source.maxBodyBytes : 1024 * 1024,
+    requestTimeoutMs:
+      typeof source.requestTimeoutMs === "number" && source.requestTimeoutMs > 0
+        ? source.requestTimeoutMs
+        : 30_000
+  };
+}
+
 function toConfigFileShape(config) {
   const provider = resolveActiveProvider(config);
   const providers = {};
@@ -178,6 +190,7 @@ function toConfigFileShape(config) {
       conversation: config.logging.conversation,
       dir: config.logging.dir
     },
+    http: resolveHttpConfig(config),
     providers
   };
 }
@@ -225,6 +238,16 @@ async function runUi(configPath) {
       current.logging.conversation
     );
     current.logging.dir = await askString(rl, "Log directory", current.logging.dir);
+    current.http.maxBodyBytes = await askNumber(
+      rl,
+      "Max request body bytes",
+      current.http.maxBodyBytes
+    );
+    current.http.requestTimeoutMs = await askNumber(
+      rl,
+      "Request timeout (ms)",
+      current.http.requestTimeoutMs
+    );
 
     activeConfig.api = await askString(rl, "pi-ai API kind", activeConfig.api);
     activeConfig.authMode = await askString(
@@ -419,5 +442,6 @@ export async function runCli(argv = process.argv.slice(2)) {
 }
 
 export const _internal = {
-  normalizeAuthDisplay
+  normalizeAuthDisplay,
+  resolveHttpConfig
 };

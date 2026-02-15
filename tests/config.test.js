@@ -20,6 +20,10 @@ test("loadConfig reads config file defaults", () => {
       conversation: false,
       dir: "./my-logs"
     },
+    http: {
+      maxBodyBytes: 2048,
+      requestTimeoutMs: 45000
+    },
     providers: {
       openai: {
         api: "openai-responses",
@@ -42,6 +46,8 @@ test("loadConfig reads config file defaults", () => {
   assert.equal(config.logging.server, true);
   assert.equal(config.logging.conversation, false);
   assert.equal(config.logging.dir, "./my-logs");
+  assert.equal(config.http.maxBodyBytes, 2048);
+  assert.equal(config.http.requestTimeoutMs, 45000);
   assert.equal(config.providers.openai.api, "openai-responses");
   assert.equal(config.upstream.provider, "openai");
   assert.equal(config.upstream.api, "openai-responses");
@@ -77,7 +83,9 @@ test("loadConfig lets environment override file config", () => {
       PIAI_LOG_ENABLED: "true",
       PIAI_LOG_SERVER: "false",
       PIAI_LOG_CONVERSATION: "true",
-      PIAI_LOG_DIR: "/tmp/piai-logs"
+      PIAI_LOG_DIR: "/tmp/piai-logs",
+      PIAI_MAX_BODY_BYTES: "4096",
+      PIAI_REQUEST_TIMEOUT_MS: "65000"
     },
     { configPath }
   );
@@ -96,6 +104,8 @@ test("loadConfig lets environment override file config", () => {
   assert.equal(config.logging.server, false);
   assert.equal(config.logging.conversation, true);
   assert.equal(config.logging.dir, "/tmp/piai-logs");
+  assert.equal(config.http.maxBodyBytes, 4096);
+  assert.equal(config.http.requestTimeoutMs, 65000);
 });
 
 test("loadConfig merges model map from file and env", () => {
@@ -143,6 +153,58 @@ test("loadConfig keeps backward compatibility with legacy upstream-only config",
   assert.equal(config.upstream.provider, "anthropic");
   assert.equal(config.providers.anthropic.api, "anthropic-messages");
   assert.equal(config.providers.anthropic.defaultModel, "claude-sonnet-4-5");
+});
+
+test("loadConfig applies default HTTP guardrails when not configured", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "piai-gateway-config-http-defaults-"));
+  const configPath = path.join(tempDir, "gateway.json");
+
+  writeConfigFile(configPath, {
+    provider: "openai-codex",
+    providers: {
+      "openai-codex": {
+        api: "openai-codex-responses"
+      }
+    }
+  });
+
+  const config = loadConfig({}, { configPath });
+  assert.equal(config.http.maxBodyBytes, 1024 * 1024);
+  assert.equal(config.http.requestTimeoutMs, 30000);
+});
+
+test("loadConfig rejects invalid auth mode", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "piai-gateway-config-invalid-auth-"));
+  const configPath = path.join(tempDir, "gateway.json");
+
+  writeConfigFile(configPath, {
+    provider: "openai-codex",
+    providers: {
+      "openai-codex": {
+        api: "openai-codex-responses",
+        authMode: "jwt"
+      }
+    }
+  });
+
+  assert.throws(() => loadConfig({}, { configPath }), /Invalid authMode/);
+});
+
+test("loadConfig rejects out-of-range port", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "piai-gateway-config-invalid-port-"));
+  const configPath = path.join(tempDir, "gateway.json");
+
+  writeConfigFile(configPath, {
+    port: 70000,
+    provider: "openai-codex",
+    providers: {
+      "openai-codex": {
+        api: "openai-codex-responses"
+      }
+    }
+  });
+
+  assert.throws(() => loadConfig({}, { configPath }), /Invalid port/);
 });
 
 test("resolveConfigPath uses default filename when omitted", () => {

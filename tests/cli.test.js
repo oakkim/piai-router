@@ -36,3 +36,20 @@ test("normalizeAuthDisplay handles object payload from OAuth provider", () => {
   assert.equal(display.url, "https://example.com/auth");
   assert.equal(display.instructions, "Paste code");
 });
+
+test("resolveHttpConfig applies defaults", () => {
+  const http = _internal.resolveHttpConfig({});
+  assert.equal(http.maxBodyBytes, 1024 * 1024);
+  assert.equal(http.requestTimeoutMs, 30000);
+});
+
+test("resolveHttpConfig keeps valid values", () => {
+  const http = _internal.resolveHttpConfig({
+    http: {
+      maxBodyBytes: 2048,
+      requestTimeoutMs: 45000
+    }
+  });
+  assert.equal(http.maxBodyBytes, 2048);
+  assert.equal(http.requestTimeoutMs, 45000);
+});
