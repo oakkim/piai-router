@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createRouter } from "../src/http/router.js";
-import { GatewayHttpError } from "../src/http/http-errors.js";
+import { createRouter } from "../../src/http/router.js";
+import { GatewayHttpError } from "../../src/http/http-errors.js";
 
 function createConfig(overrides = {}) {
   const base = {

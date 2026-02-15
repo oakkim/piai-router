@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { extractApiToken, getUpstreamApiKey } from "../src/http/upstream-auth.js";
+import { extractApiToken, getUpstreamApiKey } from "../../src/http/upstream-auth.js";
 
 test("extractApiToken reads bearer token", () => {
   const token = extractApiToken({ headers: { authorization: "Bearer abc" } });

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createCorsMiddleware } from "../src/http/cors-middleware.js";
+import { createCorsMiddleware } from "../../src/http/cors-middleware.js";
 
 function createRes() {
   return {

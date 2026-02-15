@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { _internal, createAuthMiddleware } from "../src/http/auth-middleware.js";
+import { _internal, createAuthMiddleware } from "../../src/http/auth-middleware.js";
 
 test("extractApiToken prefers x-api-key over authorization", () => {
   const token = _internal.extractApiToken({

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createFastifyApp } from "../src/http/fastify-app.js";
+import { createFastifyApp } from "../../src/http/fastify-app.js";
 
 function createConfig(overrides = {}) {
   const base = {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { composeMiddleware } from "../src/http/middleware-chain.js";
+import { composeMiddleware } from "../../src/http/middleware-chain.js";
 
 test("composeMiddleware runs middleware in order", async () => {
   const events = [];

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createErrorMiddleware } from "../src/http/error-middleware.js";
-import { GatewayHttpError } from "../src/http/http-errors.js";
+import { createErrorMiddleware } from "../../src/http/error-middleware.js";
+import { GatewayHttpError } from "../../src/http/http-errors.js";
 
 function createRes() {
   return {
