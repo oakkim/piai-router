@@ -6,7 +6,7 @@
   "packageManager": "pnpm@10.5.2",
   "description": "Anthropic-compatible router backed by @mariozechner/pi-ai",
   "bin": {
-    "pirouter": "./bin/cli.js"
+    "pirouter": "bin/cli.js"
   },
   "files": [
     "bin",
