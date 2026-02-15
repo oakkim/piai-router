@@ -436,51 +436,115 @@ function runEnv(configPath) {
   const config = loadConfig(process.env, {
     configPath: resolveConfigPath(configPath),
   });
+  const env = buildAnthropicEnv(config, {});
 
-  const lines = [
-    `export ANTHROPIC_BASE_URL=http://localhost:${config.port}`,
-    "export ANTHROPIC_API_KEY=any-value-or-router-key",
-  ];
+  stdout.write(
+    `export ANTHROPIC_BASE_URL=${env.ANTHROPIC_BASE_URL}\nexport ANTHROPIC_API_KEY=${env.ANTHROPIC_API_KEY}\n`,
+  );
+}
 
-  if (config.gatewayApiKey) {
-    lines[1] = `export ANTHROPIC_API_KEY=${config.gatewayApiKey}`;
+function buildAnthropicEnv(config, env = process.env) {
+  return {
+    ...env,
+    ANTHROPIC_BASE_URL: `http://localhost:${config.port}`,
+    ANTHROPIC_API_KEY: config.gatewayApiKey || "any-value-or-router-key",
+  };
+}
+
+function waitForServerReady(server, timeoutMs = 10_000) {
+  if (!server || typeof server.once !== "function") {
+    return Promise.resolve();
+  }
+  if (server.listening) {
+    return Promise.resolve();
   }
 
-  stdout.write(`${lines.join("\n")}\n`);
+  return new Promise((resolve, reject) => {
+    const onListening = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = (error) => {
+      cleanup();
+      reject(error instanceof Error ? error : new Error(String(error)));
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(
+        new Error(
+          `Timed out waiting for pirouter server to start on port ${server?.address?.()?.port || "unknown"}`,
+        ),
+      );
+    }, timeoutMs);
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      if (typeof server.off === "function") {
+        server.off("listening", onListening);
+        server.off("error", onError);
+      }
+    };
+
+    server.once("listening", onListening);
+    server.once("error", onError);
+  });
+}
+
+async function closeServerGracefully(server) {
+  if (!server || typeof server.close !== "function") {
+    return;
+  }
+  if (!server.listening) {
+    return;
+  }
+
+  await new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
 }
 
 async function runCode(configPath) {
   const config = loadConfig(process.env, {
     configPath: resolveConfigPath(configPath),
   });
+  const env = buildAnthropicEnv(config);
 
-  const env = {
-    ...process.env,
-    ANTHROPIC_BASE_URL: `http://localhost:${config.port}`,
-    ANTHROPIC_API_KEY: config.gatewayApiKey || "any-value-or-router-key",
-  };
+  const { startServer } = await import("./server.js");
+  const server = startServer(config);
+  await waitForServerReady(server);
+  stdout.write(`[pirouter] started local router on :${config.port}\n`);
 
-  await new Promise((resolve, reject) => {
-    const child = spawn("claude", ["code"], {
-      stdio: "inherit",
-      env,
+  try {
+    await new Promise((resolve, reject) => {
+      const child = spawn("claude", ["code"], {
+        stdio: "inherit",
+        env,
+      });
+
+      child.on("error", (error) => {
+        reject(error);
+      });
+
+      child.on("exit", (code, signal) => {
+        if (signal) {
+          reject(new Error(`claude code exited with signal ${signal}`));
+          return;
+        }
+        if (typeof code === "number") {
+          process.exitCode = code;
+        }
+        resolve();
+      });
     });
-
-    child.on("error", (error) => {
-      reject(error);
-    });
-
-    child.on("exit", (code, signal) => {
-      if (signal) {
-        reject(new Error(`claude code exited with signal ${signal}`));
-        return;
-      }
-      if (typeof code === "number") {
-        process.exitCode = code;
-      }
-      resolve();
-    });
-  });
+  } finally {
+    await closeServerGracefully(server);
+  }
 }
 
 async function runOAuthLoginWithPrompt(config, explicitProvider) {

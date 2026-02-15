@@ -1,5 +1,5 @@
 import path from "node:path";
-import { readJsonFile, writeJsonFile } from "./config-store.js";
+import { expandHomePath, readJsonFile, writeJsonFile } from "./config-store.js";
 
 const SUPPORTED_OAUTH_PROVIDERS = new Set([
   "anthropic",
@@ -15,7 +15,7 @@ function isRecord(value) {
 
 export function resolveAuthFilePath(config) {
   const authFileRaw = typeof config?.upstream?.authFile === "string" ? config.upstream.authFile.trim() : "";
-  const authFile = authFileRaw || "./piai-auth.json";
+  const authFile = expandHomePath(authFileRaw || "./piai-auth.json");
 
   if (path.isAbsolute(authFile)) {
     return authFile;

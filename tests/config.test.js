@@ -4,7 +4,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadConfig } from "../src/config.js";
-import { resolveConfigPath, writeConfigFile } from "../src/config-store.js";
+import {
+  DEFAULT_LOG_DIR,
+  expandHomePath,
+  resolveConfigPath,
+  writeConfigFile
+} from "../src/config-store.js";
 
 test("loadConfig reads config file defaults", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "piai-gateway-config-"));
@@ -169,7 +174,7 @@ test("loadConfig keeps backward compatibility with legacy upstream-only config",
   assert.equal(config.providers.anthropic.defaultModel, "claude-sonnet-4-5");
 });
 
-test("loadConfig applies default HTTP guardrails when not configured", () => {
+test("loadConfig applies default HTTP and logging guardrails when not configured", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "piai-gateway-config-http-defaults-"));
   const configPath = path.join(tempDir, "gateway.json");
 
@@ -185,6 +190,7 @@ test("loadConfig applies default HTTP guardrails when not configured", () => {
   const config = loadConfig({}, { configPath });
   assert.equal(config.http.maxBodyBytes, 1024 * 1024);
   assert.equal(config.http.requestTimeoutMs, 30000);
+  assert.equal(config.logging.dir, DEFAULT_LOG_DIR);
 });
 
 test("loadConfig rejects invalid auth mode", () => {
@@ -224,4 +230,14 @@ test("loadConfig rejects out-of-range port", () => {
 test("resolveConfigPath uses home default path when omitted", () => {
   const resolved = resolveConfigPath("", "/tmp/example");
   assert.equal(resolved, path.resolve(os.homedir(), ".pirouter", "config.json"));
+});
+
+test("expandHomePath expands tilde prefix", () => {
+  assert.equal(expandHomePath("~"), os.homedir());
+  assert.equal(expandHomePath("~/logs"), path.join(os.homedir(), "logs"));
+});
+
+test("loadConfig expands tilde for logging dir", () => {
+  const config = loadConfig({ PIAI_LOG_DIR: "~/.pirouter/custom-logs" });
+  assert.equal(config.logging.dir, path.join(os.homedir(), ".pirouter", "custom-logs"));
 });

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { DEFAULT_LOG_DIR } from "./config-store.js";
 import { createLogWriter } from "./log-writer.js";
 
 function isRecord(value) {
@@ -14,7 +15,11 @@ function resolveLoggingConfig(config) {
   const enabled = logging.enabled === true;
   const serverEnabled = enabled && logging.server !== false;
   const conversationEnabled = enabled && logging.conversation !== false;
-  const dir = path.resolve(typeof logging.dir === "string" && logging.dir.trim() ? logging.dir : "./logs");
+  const dir = path.resolve(
+    typeof logging.dir === "string" && logging.dir.trim()
+      ? logging.dir
+      : DEFAULT_LOG_DIR,
+  );
   const maxQueueSize =
     typeof logging.maxQueueSize === "number" && Number.isFinite(logging.maxQueueSize) && logging.maxQueueSize > 0
       ? Math.floor(logging.maxQueueSize)

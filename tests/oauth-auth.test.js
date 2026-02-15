@@ -19,6 +19,15 @@ test("resolveAuthFilePath resolves relative to config file directory", () => {
   assert.equal(resolved, path.resolve("/tmp/work", "auth/piai-auth.json"));
 });
 
+test("resolveAuthFilePath expands tilde path", () => {
+  const config = {
+    configPath: "/tmp/work/piai-router.config.json",
+    upstream: { authFile: "~/.pirouter/auth.json" }
+  };
+  const resolved = resolveAuthFilePath(config);
+  assert.equal(resolved, path.join(os.homedir(), ".pirouter", "auth.json"));
+});
+
 test("getOAuthProvider resolves from explicit/provider defaults", () => {
   const config = {
     provider: "openai-codex",

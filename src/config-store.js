@@ -3,9 +3,25 @@ import os from "node:os";
 import path from "node:path";
 
 export const DEFAULT_CONFIG_PATH = path.join(os.homedir(), ".pirouter", "config.json");
+export const DEFAULT_DATA_DIR = path.dirname(DEFAULT_CONFIG_PATH);
+export const DEFAULT_LOG_DIR = path.join(DEFAULT_DATA_DIR, "logs");
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function expandHomePath(filePath) {
+  const raw = typeof filePath === "string" ? filePath.trim() : "";
+  if (!raw) {
+    return raw;
+  }
+  if (raw === "~") {
+    return os.homedir();
+  }
+  if (raw.startsWith("~/") || raw.startsWith("~\\")) {
+    return path.join(os.homedir(), raw.slice(2));
+  }
+  return raw;
 }
 
 export function resolveConfigPath(configPath, cwd = process.cwd()) {
@@ -13,7 +29,7 @@ export function resolveConfigPath(configPath, cwd = process.cwd()) {
   if (!raw) {
     return DEFAULT_CONFIG_PATH;
   }
-  return path.resolve(cwd, raw);
+  return path.resolve(cwd, expandHomePath(raw));
 }
 
 export function readConfigFile(configPath) {

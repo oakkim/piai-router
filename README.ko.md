@@ -116,7 +116,7 @@ pirouter login openai-codex
     "enabled": true,
     "server": true,
     "conversation": true,
-    "dir": "./logs",
+    "dir": "~/.pirouter/logs",
     "maxQueueSize": 5000
   }
 }
@@ -138,7 +138,7 @@ pirouter login openai-codex
 PIAI_LOG_ENABLED=true
 PIAI_LOG_SERVER=true
 PIAI_LOG_CONVERSATION=false
-PIAI_LOG_DIR=./logs
+PIAI_LOG_DIR=~/.pirouter/logs
 ```
 
 ## HTTP 가드레일

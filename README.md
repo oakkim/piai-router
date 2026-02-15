@@ -171,7 +171,7 @@ Controlled via the `logging` section in config.
     "enabled": true,
     "server": true,
     "conversation": true,
-    "dir": "./logs",
+    "dir": "~/.pirouter/logs",
     "maxQueueSize": 5000
   }
 }
@@ -193,7 +193,7 @@ You can also control logging via env:
 PIAI_LOG_ENABLED=true
 PIAI_LOG_SERVER=true
 PIAI_LOG_CONVERSATION=false
-PIAI_LOG_DIR=./logs
+PIAI_LOG_DIR=~/.pirouter/logs
 ```
 
 ## HTTP Guardrails

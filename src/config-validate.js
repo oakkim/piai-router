@@ -1,3 +1,5 @@
+import { DEFAULT_LOG_DIR } from "./config-store.js";
+
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -74,7 +76,10 @@ function validateProviderConfig(providerId, providerConfig) {
 
 function normalizeLogging(logging) {
   const source = isRecord(logging) ? logging : {};
-  const dir = typeof source.dir === "string" && source.dir.trim() ? source.dir.trim() : "./logs";
+  const dir =
+    typeof source.dir === "string" && source.dir.trim()
+      ? source.dir.trim()
+      : DEFAULT_LOG_DIR;
   return {
     enabled: source.enabled === true,
     server: source.server !== false,

@@ -1,4 +1,9 @@
-import { readConfigFile, resolveConfigPath } from "./config-store.js";
+import {
+  DEFAULT_LOG_DIR,
+  expandHomePath,
+  readConfigFile,
+  resolveConfigPath
+} from "./config-store.js";
 import { validateAndNormalizeConfig } from "./config-validate.js";
 
 const DEFAULT_PROVIDER = "openai-codex";
@@ -47,7 +52,7 @@ function defaultConfig() {
       enabled: false,
       server: true,
       conversation: true,
-      dir: "./logs",
+      dir: DEFAULT_LOG_DIR,
     },
     http: {
       maxBodyBytes: 1024 * 1024,
@@ -230,7 +235,7 @@ function mergeConfigWithObject(config, candidate) {
     config.logging.conversation,
   );
   if (typeof logging.dir === "string" && logging.dir.trim()) {
-    config.logging.dir = logging.dir.trim();
+    config.logging.dir = expandHomePath(logging.dir.trim());
   }
 
   const http = isRecord(candidate.http) ? candidate.http : {};
@@ -405,9 +410,9 @@ function mergeConfigWithEnv(config, env) {
     );
   }
   if (env.PIAI_LOG_DIR !== undefined && String(env.PIAI_LOG_DIR).trim()) {
-    config.logging.dir = String(env.PIAI_LOG_DIR).trim();
+    config.logging.dir = expandHomePath(String(env.PIAI_LOG_DIR).trim());
   } else if (env.LOG_DIR !== undefined && String(env.LOG_DIR).trim()) {
-    config.logging.dir = String(env.LOG_DIR).trim();
+    config.logging.dir = expandHomePath(String(env.LOG_DIR).trim());
   }
 
   if (env.PIAI_MAX_BODY_BYTES !== undefined) {
