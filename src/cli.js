@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { loadConfig } from "./config.js";
@@ -431,6 +432,57 @@ async function runStart(configPath) {
   startServer(config);
 }
 
+function runEnv(configPath) {
+  const config = loadConfig(process.env, {
+    configPath: resolveConfigPath(configPath),
+  });
+
+  const lines = [
+    `export ANTHROPIC_BASE_URL=http://localhost:${config.port}`,
+    "export ANTHROPIC_API_KEY=any-value-or-router-key",
+  ];
+
+  if (config.gatewayApiKey) {
+    lines[1] = `export ANTHROPIC_API_KEY=${config.gatewayApiKey}`;
+  }
+
+  stdout.write(`${lines.join("\n")}\n`);
+}
+
+async function runCode(configPath) {
+  const config = loadConfig(process.env, {
+    configPath: resolveConfigPath(configPath),
+  });
+
+  const env = {
+    ...process.env,
+    ANTHROPIC_BASE_URL: `http://localhost:${config.port}`,
+    ANTHROPIC_API_KEY: config.gatewayApiKey || "any-value-or-router-key",
+  };
+
+  await new Promise((resolve, reject) => {
+    const child = spawn("claude", ["code"], {
+      stdio: "inherit",
+      env,
+    });
+
+    child.on("error", (error) => {
+      reject(error);
+    });
+
+    child.on("exit", (code, signal) => {
+      if (signal) {
+        reject(new Error(`claude code exited with signal ${signal}`));
+        return;
+      }
+      if (typeof code === "number") {
+        process.exitCode = code;
+      }
+      resolve();
+    });
+  });
+}
+
 async function runOAuthLoginWithPrompt(config, explicitProvider) {
   const rl = createInterface({ input: stdin, output: stdout });
   try {
@@ -513,6 +565,12 @@ function printHelp() {
   stdout.write(
     `  pirouter login [provider] [--config <path>] # OAuth login and save credentials\n`,
   );
+  stdout.write(
+    `  pirouter env [--config <path>]     # print ANTHROPIC_* export commands\n`,
+  );
+  stdout.write(
+    `  pirouter code [--config <path>]    # run 'claude code' with env applied\n`,
+  );
   stdout.write(`  pirouter help\n`);
 }
 
@@ -534,6 +592,12 @@ export async function runCli(argv = process.argv.slice(2)) {
     case "login":
       await runLogin(args.configPath, args.rawArgs[0] || "");
       return 0;
+    case "env":
+      runEnv(args.configPath);
+      return 0;
+    case "code":
+      await runCode(args.configPath);
+      return typeof process.exitCode === "number" ? process.exitCode : 0;
     case "help":
     default:
       printHelp();

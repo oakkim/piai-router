@@ -19,6 +19,59 @@ A lightweight gateway/router that provides Claude API (`Anthropic Messages`) com
 pnpm install
 ```
 
+## Getting Started
+
+### 1) Create config interactively
+
+```bash
+pnpm pirouter ui
+```
+
+This creates `~/.pirouter/config.json` with your provider/auth settings.
+
+### 2) Start the router
+
+```bash
+pnpm pirouter start
+```
+
+By default, it listens on `http://localhost:8787`.
+
+### 3) Point Claude-compatible clients
+
+```bash
+export ANTHROPIC_BASE_URL=http://localhost:8787
+export ANTHROPIC_API_KEY=any-value-or-router-key
+```
+
+Or print these commands from your config:
+
+```bash
+pnpm pirouter env
+```
+
+If you set `ROUTER_API_KEY`, use the same value for `ANTHROPIC_API_KEY`.
+
+### 4) Launch Claude Code directly (optional)
+
+```bash
+pnpm pirouter code
+```
+
+This runs `claude code` with `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` automatically applied.
+
+### 5) Quick health check
+
+```bash
+curl -s http://localhost:8787/health
+```
+
+Expected response:
+
+```json
+{"ok":true}
+```
+
 ## CLI Setup
 
 Default config file path is `~/.pirouter/config.json`.
@@ -35,6 +88,12 @@ pnpm pirouter start
 
 # OAuth login (example: codex)
 pnpm pirouter login openai-codex
+
+# Print env exports for Claude-compatible clients
+pnpm pirouter env
+
+# Launch Claude Code with env auto-applied
+pnpm pirouter code
 ```
 
 To use globally as `pirouter`:
@@ -158,6 +217,13 @@ PIAI_REQUEST_TIMEOUT_MS=30000
 ```
 
 ## Claude Code Example
+
+```bash
+pnpm pirouter env
+pnpm pirouter code
+```
+
+If you prefer manual setup:
 
 ```bash
 export ANTHROPIC_BASE_URL=http://localhost:8787

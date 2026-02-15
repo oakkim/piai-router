@@ -33,6 +33,12 @@ pnpm pirouter start
 
 # OAuth 로그인 (예: codex)
 pnpm pirouter login openai-codex
+
+# Claude 호환 클라이언트용 export 출력
+pnpm pirouter env
+
+# 환경변수를 자동 적용해 Claude Code 실행
+pnpm pirouter code
 ```
 
 글로벌로 `pirouter ui` 형태로 쓰려면:
@@ -156,6 +162,13 @@ PIAI_REQUEST_TIMEOUT_MS=30000
 ```
 
 ## Claude Code 설정 예시
+
+```bash
+pnpm pirouter env
+pnpm pirouter code
+```
+
+수동으로 설정하려면:
 
 ```bash
 export ANTHROPIC_BASE_URL=http://localhost:8787

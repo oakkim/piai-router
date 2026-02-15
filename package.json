@@ -1,13 +1,35 @@
 {
   "name": "piai-router",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "type": "module",
   "packageManager": "pnpm@10.5.2",
   "description": "Anthropic-compatible router backed by @mariozechner/pi-ai",
   "bin": {
     "pirouter": "./bin/cli.js"
   },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "README.ko.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/oakkim/piai-router.git"
+  },
+  "bugs": {
+    "url": "https://github.com/oakkim/piai-router/issues"
+  },
+  "homepage": "https://github.com/oakkim/piai-router#readme",
+  "license": "MIT",
+  "keywords": [
+    "cli",
+    "router",
+    "gateway",
+    "anthropic",
+    "openai"
+  ],
   "scripts": {
     "start": "node ./bin/cli.js start",
     "pirouter": "node ./bin/cli.js",

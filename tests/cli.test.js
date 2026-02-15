@@ -79,4 +79,32 @@ test("runCli help prints pirouter command names", async () => {
   assert.match(output, /piai-router CLI/);
   assert.match(output, /pirouter start/);
   assert.match(output, /pirouter login/);
+  assert.match(output, /pirouter env/);
+  assert.match(output, /pirouter code/);
+});
+
+test("runCli env prints export commands", async () => {
+  const writes = [];
+  const originalWrite = process.stdout.write;
+
+  process.stdout.write = (chunk, encoding, callback) => {
+    writes.push(String(chunk));
+    if (typeof encoding === "function") {
+      encoding();
+    } else if (typeof callback === "function") {
+      callback();
+    }
+    return true;
+  };
+
+  try {
+    const code = await runCli(["env"]);
+    assert.equal(code, 0);
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+
+  const output = writes.join("");
+  assert.match(output, /export ANTHROPIC_BASE_URL=http:\/\/localhost:/);
+  assert.match(output, /export ANTHROPIC_API_KEY=/);
 });
