@@ -72,7 +72,8 @@ export function startServer(config = loadConfig()) {
       : "node";
 
   if (engine === "fastify") {
-    const app = createFastifyApp({ config, logger });
+    const runner = createPiRunner(config);
+    const app = createFastifyApp({ config, runner, logger });
     logger.server("server_start", {
       port: config.port,
       provider: config.provider || config.platform,
