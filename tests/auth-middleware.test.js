@@ -2,24 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { _internal, createAuthMiddleware } from "../src/http/auth-middleware.js";
 
-function createRes() {
-  return {
-    statusCode: 0,
-    headers: {},
-    body: "",
-    headersSent: false,
-    writeHead(statusCode, headers) {
-      this.statusCode = statusCode;
-      this.headers = headers;
-      this.headersSent = true;
-    },
-    end(body = "") {
-      this.body = body;
-      this.headersSent = true;
-    }
-  };
-}
-
 test("extractApiToken prefers x-api-key over authorization", () => {
   const token = _internal.extractApiToken({
     headers: {
@@ -37,36 +19,34 @@ test("validateGatewayApiKey allows requests when no gateway key set", () => {
 
 test("createAuthMiddleware blocks invalid key", async () => {
   const middleware = createAuthMiddleware();
-  const res = createRes();
   let calledNext = false;
 
-  await middleware(
-    {
-      req: { method: "POST", url: "/v1/messages", headers: { "x-api-key": "bad" } },
-      res,
-      config: { gatewayApiKey: "good" },
-      logger: { server: () => {} },
-      requestId: "req1"
-    },
-    async () => {
-      calledNext = true;
-    }
+  await assert.rejects(
+    () =>
+      middleware(
+        {
+          req: { method: "POST", url: "/v1/messages", headers: { "x-api-key": "bad" } },
+          config: { gatewayApiKey: "good" },
+          logger: { server: () => {} },
+          requestId: "req1"
+        },
+        async () => {
+          calledNext = true;
+        }
+      ),
+    /Invalid API key/
   );
 
   assert.equal(calledNext, false);
-  assert.equal(res.statusCode, 401);
-  assert.match(res.body, /Invalid API key/);
 });
 
 test("createAuthMiddleware passes valid key", async () => {
   const middleware = createAuthMiddleware();
-  const res = createRes();
   let calledNext = false;
 
   await middleware(
     {
       req: { method: "POST", url: "/v1/messages", headers: { authorization: "Bearer good" } },
-      res,
       config: { gatewayApiKey: "good" },
       logger: { server: () => {} },
       requestId: "req2"
@@ -77,5 +57,4 @@ test("createAuthMiddleware passes valid key", async () => {
   );
 
   assert.equal(calledNext, true);
-  assert.equal(res.statusCode, 0);
 });
