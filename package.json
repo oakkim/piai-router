@@ -1,6 +1,6 @@
 {
   "name": "piai-router",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "type": "module",
   "packageManager": "pnpm@10.5.2",
