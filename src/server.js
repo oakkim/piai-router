@@ -2,50 +2,59 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
-import { createGatewayHandler } from "./http-handler.js";
 import { createGatewayLogger } from "./logger.js";
 import { createPiRunner } from "./pi-runner.js";
-
-function createRequestId(prefix = "req") {
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
+import { createAuthMiddleware } from "./http/auth-middleware.js";
+import { createCorsMiddleware } from "./http/cors-middleware.js";
+import { createErrorMiddleware } from "./http/error-middleware.js";
+import { composeMiddleware } from "./http/middleware-chain.js";
+import { attachRequestContext } from "./http/request-context.js";
+import { createRouter } from "./http/router.js";
 
 export function createServer(config, options = {}) {
   const runner = createPiRunner(config);
   const logger = options.logger || createGatewayLogger(config);
-  const handler = createGatewayHandler({ config, runner, logger });
+  const routeRequest = createRouter({ config, runner, logger });
+
+  const pipeline = composeMiddleware(
+    [createErrorMiddleware(), createCorsMiddleware(), createAuthMiddleware()],
+    async (context) => {
+      await routeRequest(context);
+    }
+  );
 
   return http.createServer((req, res) => {
-    const startedAt = Date.now();
-    const requestId = createRequestId("http");
-    req.piaiRequestId = requestId;
-    res.setHeader("x-request-id", requestId);
+    const contextMeta = attachRequestContext(req, res);
 
     res.on("finish", () => {
       logger.server("http_access", {
-        requestId,
-        method: req.method || "",
-        url: req.url || "",
+        requestId: contextMeta.requestId,
+        method: contextMeta.method,
+        url: contextMeta.url,
         statusCode: res.statusCode,
-        durationMs: Date.now() - startedAt
+        durationMs: Date.now() - contextMeta.startedAt
       });
     });
 
-    handler(req, res).catch((error) => {
+    pipeline({ req, res, config, runner, logger, ...contextMeta }).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
-      logger.server("http_handler_error", {
-        requestId,
-        method: req.method || "",
-        url: req.url || "",
+      logger.server("http_pipeline_error", {
+        requestId: contextMeta.requestId,
+        method: contextMeta.method,
+        url: contextMeta.url,
         message
       });
-      res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
-      res.end(
-        JSON.stringify({
-          type: "error",
-          error: { type: "api_error", message }
-        })
-      );
+      if (!res.headersSent) {
+        res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
+        res.end(
+          JSON.stringify({
+            type: "error",
+            error: { type: "api_error", message }
+          })
+        );
+      } else {
+        res.end();
+      }
     });
   });
 }

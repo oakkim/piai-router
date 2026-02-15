@@ -33,14 +33,6 @@ function anthropicError(type, message) {
   };
 }
 
-function getHeader(req, name) {
-  const value = req.headers[name.toLowerCase()];
-  if (Array.isArray(value)) {
-    return value[0] || "";
-  }
-  return value || "";
-}
-
 function normalizePathname(url) {
   const raw = typeof url === "string" ? url : "";
   const pathOnly = raw.split("?", 1)[0] || "/";
@@ -48,27 +40,6 @@ function normalizePathname(url) {
     return pathOnly.replace(/\/+$/, "");
   }
   return pathOnly;
-}
-
-function extractApiToken(req) {
-  const xApiKey = String(getHeader(req, "x-api-key") || "").trim();
-  if (xApiKey) {
-    return xApiKey;
-  }
-  const auth = String(getHeader(req, "authorization") || "").trim();
-  if (auth.toLowerCase().startsWith("bearer ")) {
-    return auth.slice(7).trim();
-  }
-  return "";
-}
-
-function validateGatewayApiKey(req, config) {
-  const required = String(config.gatewayApiKey || "").trim();
-  if (!required) {
-    return true;
-  }
-  const incoming = extractApiToken(req);
-  return incoming === required;
 }
 
 async function readJsonBody(req) {
@@ -98,7 +69,26 @@ function getUpstreamApiKey(req, config) {
   if (config?.upstream?.authMode === "oauth") {
     return "";
   }
-  return config.upstream.apiKey || extractApiToken(req);
+
+  const configuredApiKey = String(config?.upstream?.apiKey || "").trim();
+  if (configuredApiKey) {
+    return configuredApiKey;
+  }
+
+  const xApiKey = String(req.headers["x-api-key"] || "").trim();
+  if (xApiKey) {
+    return xApiKey;
+  }
+
+  const authHeader = req.headers.authorization;
+  const auth = Array.isArray(authHeader)
+    ? String(authHeader[0] || "").trim()
+    : String(authHeader || "").trim();
+  if (auth.toLowerCase().startsWith("bearer ")) {
+    return auth.slice(7).trim();
+  }
+
+  return "";
 }
 
 async function handleCountTokens(req, res, logger) {
@@ -294,26 +284,6 @@ export function createGatewayHandler(params) {
   return async function gatewayHandler(req, res) {
     const pathname = normalizePathname(req.url);
 
-    if (req.method === "OPTIONS") {
-      res.writeHead(204, {
-        "access-control-allow-origin": "*",
-        "access-control-allow-methods": "GET,POST,OPTIONS",
-        "access-control-allow-headers": "content-type,authorization,x-api-key,anthropic-version"
-      });
-      res.end();
-      return;
-    }
-
-    if (!validateGatewayApiKey(req, config)) {
-      json(res, 401, anthropicError("authentication_error", "Invalid API key"));
-      logger?.server("auth_failed", {
-        requestId: getRequestId(req),
-        method: req.method,
-        url: req.url
-      });
-      return;
-    }
-
     if (req.method === "GET" && pathname === "/health") {
       json(res, 200, { ok: true });
       return;
@@ -346,7 +316,5 @@ export function createGatewayHandler(params) {
 export const _internal = {
   readJsonBody,
   resolveModelForBody,
-  extractApiToken,
-  validateGatewayApiKey,
   normalizePathname
 };
