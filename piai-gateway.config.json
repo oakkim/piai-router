@@ -1,0 +1,63 @@
+{
+  "port": 8787,
+  "gatewayApiKey": "",
+  "debug": true,
+  "provider": "openai-codex",
+  "modelMap": {
+    "openai-codex:claude-sonnet-4-5": {
+      "model": "gpt-5.3-codex",
+      "reasoning": {
+        "low": "minimal",
+        "medium": "medium",
+        "high": "high",
+        "max": "xhigh",
+        "default": "medium"
+      }
+    },
+    "openai-codex:claude-haiku-4-5": {
+      "model": "gpt-5.1-codex-mini",
+      "reasoning": {
+        "low": "minimal",
+        "medium": "minimal",
+        "high": "medium",
+        "max": "high",
+        "default": "minimal"
+      }
+    },
+    "openai-codex:claude-opus-4-6": {
+      "model": "gpt-5.1-codex-max",
+      "effort": {
+        "low": "medium",
+        "medium": "high",
+        "high": "xhigh",
+        "max": "xhigh",
+        "default": "high"
+      }
+    },
+    "default": {
+      "openai-codex": "gpt-5.3-codex"
+    }
+  },
+  "logging": {
+    "enabled": true,
+    "server": true,
+    "conversation": true,
+    "dir": "./logs"
+  },
+  "providers": {
+    "openai-codex": {
+      "api": "openai-codex-responses",
+      "authMode": "oauth",
+      "oauthProvider": "openai-codex",
+      "authFile": "./piai-auth.json",
+      "baseUrl": "https://chatgpt.com/backend-api",
+      "apiKey": "",
+      "defaultModel": "gpt-5.1-codex-mini",
+      "reasoning": true,
+      "input": ["text", "image"],
+      "contextWindow": 128000,
+      "maxTokens": 128000,
+      "headers": {}
+    }
+  }
+}

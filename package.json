@@ -1,0 +1,19 @@
+{
+  "name": "piai-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.5.2",
+  "description": "Anthropic-compatible gateway backed by @mariozechner/pi-ai",
+  "bin": {
+    "cli": "./bin/cli.js"
+  },
+  "scripts": {
+    "start": "node ./bin/cli.js start",
+    "cli": "node ./bin/cli.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@mariozechner/pi-ai": "^0.52.12"
+  }
+}
