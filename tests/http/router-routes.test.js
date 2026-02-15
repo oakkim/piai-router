@@ -284,6 +284,116 @@ test("router recovers non-stream empty completion from stream thinking", async (
   assert.equal(typeof body.content[0].signature, "string");
 });
 
+test("router preserves stream event order when recovering non-stream response", async () => {
+  const logger = createLogger();
+  let streamCalls = 0;
+  const route = createRouter({
+    config: createConfig(),
+    runner: {
+      complete: async () => ({
+        content: [],
+        stopReason: "error",
+        errorMessage: "Request was aborted",
+        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+      }),
+      stream: async () => {
+        streamCalls += 1;
+        return (async function* () {
+          yield { type: "start" };
+          yield { type: "text_delta", contentIndex: 0, delta: "Hello " };
+          yield { type: "thinking_delta", contentIndex: 1, delta: "Plan" };
+          yield { type: "text_delta", contentIndex: 0, delta: "world" };
+          yield {
+            type: "toolcall_end",
+            contentIndex: 2,
+            toolCall: { id: "call-1", name: "getWeather", arguments: { city: "SF" } }
+          };
+          yield {
+            type: "done",
+            reason: "stop",
+            message: {
+              content: [],
+              stopReason: "stop",
+              usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 }
+            }
+          };
+        })();
+      }
+    },
+    logger
+  });
+
+  const req = createReq({
+    method: "POST",
+    url: "/v1/messages",
+    body: {
+      model: "gpt-5",
+      stream: false,
+      messages: [{ role: "user", content: "recover order" }]
+    }
+  });
+  const res = createRes();
+
+  await route({ req, res, logger, requestId: "req-msg-order" });
+
+  assert.equal(streamCalls, 1);
+  assert.equal(res.statusCode, 200);
+  const body = JSON.parse(res.bodyText());
+  assert.equal(body.type, "message");
+  assert.equal(body.content.length, 3);
+  assert.equal(body.content[0].type, "text");
+  assert.equal(body.content[0].text, "Hello world");
+  assert.equal(body.content[1].type, "thinking");
+  assert.equal(body.content[1].thinking, "Plan");
+  assert.equal(body.content[2].type, "tool_use");
+  assert.equal(body.content[2].name, "getWeather");
+  assert.deepEqual(body.content[2].input, { city: "SF" });
+});
+
+test("router does not recover empty non-terminal completion", async () => {
+  const logger = createLogger();
+  let streamCalls = 0;
+  const route = createRouter({
+    config: createConfig(),
+    runner: {
+      complete: async () => ({
+        content: [],
+        stopReason: "stop",
+        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+      }),
+      stream: async () => {
+        streamCalls += 1;
+        return (async function* () {
+          yield { type: "start" };
+          yield { type: "text_delta", contentIndex: 0, delta: "should not run" };
+          yield { type: "done", reason: "stop", message: { content: [], stopReason: "stop" } };
+        })();
+      }
+    },
+    logger
+  });
+
+  const req = createReq({
+    method: "POST",
+    url: "/v1/messages",
+    body: {
+      model: "gpt-5",
+      stream: false,
+      messages: [{ role: "user", content: "empty but stop" }]
+    }
+  });
+  const res = createRes();
+
+  await route({ req, res, logger, requestId: "req-msg-no-recover" });
+
+  assert.equal(streamCalls, 0);
+  assert.equal(res.statusCode, 200);
+  const body = JSON.parse(res.bodyText());
+  assert.equal(body.type, "message");
+  assert.equal(Array.isArray(body.content), true);
+  assert.equal(body.content.length, 0);
+});
+
 test("router handles /v1/messages stream success", async () => {
   const logger = createLogger();
   const route = createRouter({

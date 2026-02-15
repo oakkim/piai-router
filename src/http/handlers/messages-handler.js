@@ -14,6 +14,56 @@ function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const REDACTED_VALUE = "[REDACTED]";
+const SENSITIVE_KEY_FRAGMENTS = [
+  "authorization",
+  "api-key",
+  "api_key",
+  "apikey",
+  "x-api-key",
+  "x_api_key",
+  "access_token",
+  "refresh_token",
+  "id_token",
+  "token",
+  "secret",
+  "password",
+  "client_secret",
+  "private_key",
+  "ssh_key",
+  "sessionid",
+  "cookie"
+];
+
+function shouldRedactKey(key) {
+  const normalized = String(key || "").toLowerCase();
+  return SENSITIVE_KEY_FRAGMENTS.some((fragment) => normalized.includes(fragment));
+}
+
+export function sanitizeForLogging(value, seen = new WeakSet()) {
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  if (seen.has(value)) {
+    return "[Circular]";
+  }
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeForLogging(entry, seen));
+  }
+
+  const out = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (shouldRedactKey(key)) {
+      out[key] = typeof entry === "undefined" ? entry : REDACTED_VALUE;
+      continue;
+    }
+    out[key] = sanitizeForLogging(entry, seen);
+  }
+  return out;
+}
+
 function hasVisibleAssistantContent(message) {
   if (!isRecord(message)) {
     return false;
@@ -48,44 +98,51 @@ function appendDelta(map, index, delta) {
   map.set(key, prev + delta);
 }
 
-function collectSortedKeys(map) {
-  return [...map.keys()].sort((a, b) => a - b);
+function recordContentOrder(state, kind, index) {
+  const key = `${kind}:${Number.isFinite(index) ? index : 0}`;
+  if (state.orderKeys.has(key)) {
+    return;
+  }
+  state.orderKeys.add(key);
+  state.order.push({ kind, index: Number.isFinite(index) ? index : 0 });
 }
 
 function synthesizeContentFromStreamEvents(state) {
   const content = [];
 
-  for (const idx of collectSortedKeys(state.thinkingByIndex)) {
-    const thinking = state.thinkingByIndex.get(idx) || "";
-    if (thinking) {
-      content.push({ type: "thinking", thinking });
-    }
-  }
-
-  for (const idx of collectSortedKeys(state.textByIndex)) {
-    const text = state.textByIndex.get(idx) || "";
-    if (text) {
-      content.push({ type: "text", text });
-    }
-  }
-
-  for (const idx of collectSortedKeys(state.toolCallByIndex)) {
-    const toolCall = state.toolCallByIndex.get(idx);
-    if (!isRecord(toolCall)) {
+  for (const entry of state.order) {
+    if (entry.kind === "thinking") {
+      const thinking = state.thinkingByIndex.get(entry.index) || "";
+      if (thinking) {
+        content.push({ type: "thinking", thinking });
+      }
       continue;
     }
-    const name = typeof toolCall.name === "string" ? toolCall.name : "";
-    if (!name) {
+    if (entry.kind === "text") {
+      const text = state.textByIndex.get(entry.index) || "";
+      if (text) {
+        content.push({ type: "text", text });
+      }
       continue;
     }
-    const id = typeof toolCall.id === "string" && toolCall.id ? toolCall.id : `tool_${idx}`;
-    const args = isRecord(toolCall.arguments) ? toolCall.arguments : {};
-    content.push({
-      type: "toolCall",
-      id,
-      name,
-      arguments: args
-    });
+    if (entry.kind === "toolCall") {
+      const toolCall = state.toolCallByIndex.get(entry.index);
+      if (!isRecord(toolCall)) {
+        continue;
+      }
+      const name = typeof toolCall.name === "string" ? toolCall.name : "";
+      if (!name) {
+        continue;
+      }
+      const id = typeof toolCall.id === "string" && toolCall.id ? toolCall.id : `tool_${entry.index}`;
+      const args = isRecord(toolCall.arguments) ? toolCall.arguments : {};
+      content.push({
+        type: "toolCall",
+        id,
+        name,
+        arguments: args
+      });
+    }
   }
 
   return content;
@@ -96,7 +153,9 @@ async function recoverCompletionFromStream({ runner, streamArgs }) {
   const recoveryState = {
     thinkingByIndex: new Map(),
     textByIndex: new Map(),
-    toolCallByIndex: new Map()
+    toolCallByIndex: new Map(),
+    order: [],
+    orderKeys: new Set()
   };
 
   let finalMessage = null;
@@ -107,15 +166,18 @@ async function recoverCompletionFromStream({ runner, streamArgs }) {
 
     const contentIndex = Number(event.contentIndex);
     if (event.type === "thinking_delta") {
+      recordContentOrder(recoveryState, "thinking", contentIndex);
       appendDelta(recoveryState.thinkingByIndex, contentIndex, event.delta);
       continue;
     }
     if (event.type === "text_delta") {
+      recordContentOrder(recoveryState, "text", contentIndex);
       appendDelta(recoveryState.textByIndex, contentIndex, event.delta);
       continue;
     }
     if (event.type === "toolcall_end" && isRecord(event.toolCall)) {
       const key = Number.isFinite(contentIndex) ? contentIndex : recoveryState.toolCallByIndex.size;
+      recordContentOrder(recoveryState, "toolCall", key);
       recoveryState.toolCallByIndex.set(key, event.toolCall);
       continue;
     }
@@ -195,7 +257,7 @@ export function createMessagesHandler({ config, runner, logger }) {
       sourceEffort: modelRoute.sourceEffort,
       mappedReasoning: modelRoute.hasReasoningOverride ? modelRoute.reasoning : "",
       modelMatch: modelRoute.matchedBy,
-      body
+      body: sanitizeForLogging(body)
     });
 
     if (!isStream) {
@@ -217,12 +279,19 @@ export function createMessagesHandler({ config, runner, logger }) {
             stopReason: typeof completion?.stopReason === "string" ? completion.stopReason : "",
             errorMessage: typeof completion?.errorMessage === "string" ? completion.errorMessage : ""
           });
-          const recovered = await recoverCompletionFromStream({
-            runner,
-            streamArgs: runArgs
-          });
-          if (recovered) {
-            completion = recovered;
+
+          const shouldRecover =
+            completion?.stopReason === "error" || completion?.stopReason === "aborted" ||
+            (typeof completion?.errorMessage === "string" && completion.errorMessage.trim());
+
+          if (shouldRecover) {
+            const recovered = await recoverCompletionFromStream({
+              runner,
+              streamArgs: runArgs
+            });
+            if (recovered) {
+              completion = recovered;
+            }
           }
         }
 
@@ -249,7 +318,7 @@ export function createMessagesHandler({ config, runner, logger }) {
           requestId,
           stream: false,
           stopReason: responseBody.stop_reason,
-          response: responseBody
+          response: sanitizeForLogging(responseBody)
         });
         return;
       } catch (error) {
@@ -301,7 +370,7 @@ export function createMessagesHandler({ config, runner, logger }) {
             requestId,
             stream: true,
             stopReason: responseBody.stop_reason,
-            response: responseBody
+            response: sanitizeForLogging(responseBody)
           });
         } else if (event?.type === "error") {
           logger?.conversation("response_error", {

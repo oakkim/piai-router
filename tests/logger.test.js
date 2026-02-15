@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createGatewayLogger } from "../src/logger.js";
+import { sanitizeForLogging } from "../src/http/handlers/messages-handler.js";
 
 test("createGatewayLogger writes server and conversation logs when enabled", async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "piai-gateway-logger-enabled-"));
@@ -82,5 +83,37 @@ test("createGatewayLogger reports dropped logs when queue overflows", async () =
   await logger.flush();
 
   assert.equal(typeof logger.getDroppedCount(), "number");
+});
+
+test("sanitizeForLogging redacts sensitive fields deeply and preserves shape", () => {
+  const input = {
+    apiKey: "secret-key",
+    nested: {
+      Authorization: "Bearer token",
+      data: [{ password: "p@ss" }, { value: 123 }]
+    },
+    array: [{ x_api_key: "hidden" }, { ok: true }],
+    token: "abc",
+    normal: "keep"
+  };
+
+  const sanitized = sanitizeForLogging(input);
+
+  assert.equal(sanitized.apiKey, "[REDACTED]");
+  assert.equal(sanitized.nested.Authorization, "[REDACTED]");
+  assert.equal(sanitized.nested.data[0].password, "[REDACTED]");
+  assert.equal(sanitized.array[0].x_api_key, "[REDACTED]");
+  assert.equal(sanitized.normal, "keep");
+  assert.equal(sanitized.token, "[REDACTED]");
+  // original unchanged
+  assert.equal(input.apiKey, "secret-key");
+});
+
+test("sanitizeForLogging handles circular references", () => {
+  const obj = { token: "top" };
+  obj.self = obj;
+  const sanitized = sanitizeForLogging(obj);
+  assert.equal(sanitized.token, "[REDACTED]");
+  assert.equal(sanitized.self, "[Circular]");
 });
 
