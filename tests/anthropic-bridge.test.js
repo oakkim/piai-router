@@ -136,6 +136,49 @@ test("piAssistantToAnthropicMessage can suppress thinking blocks", () => {
   assert.equal(output.content[0].text, "{\"ok\":true}");
 });
 
+test("piAssistantToAnthropicMessage generates deterministic thinking signatures", () => {
+  const baseMessage = {
+    stopReason: "stop",
+    usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 }
+  };
+
+  const outputA = piAssistantToAnthropicMessage({
+    requestedModel: "claude-sonnet-4-5",
+    resolvedModel: "gpt-5",
+    message: {
+      ...baseMessage,
+      content: [{ type: "thinking", thinking: "line1\r\nline2" }]
+    }
+  });
+
+  const outputB = piAssistantToAnthropicMessage({
+    requestedModel: "claude-sonnet-4-5",
+    resolvedModel: "gpt-5",
+    message: {
+      ...baseMessage,
+      content: [{ type: "thinking", thinking: "line1\nline2" }]
+    }
+  });
+
+  assert.equal(outputA.content[0].signature, outputB.content[0].signature);
+});
+
+test("piAssistantToAnthropicMessage suppresses fallback thinking when suppressed", () => {
+  const output = piAssistantToAnthropicMessage({
+    requestedModel: "claude-sonnet-4-5",
+    resolvedModel: "gpt-5",
+    suppressThinking: true,
+    message: {
+      stopReason: "error",
+      errorMessage: "Request was aborted",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      content: []
+    }
+  });
+
+  assert.equal(output.content.length, 0);
+});
+
 test("piAssistantToAnthropicMessage falls back to thinking block for empty error message", () => {
   const output = piAssistantToAnthropicMessage({
     requestedModel: "claude-sonnet-4-5",

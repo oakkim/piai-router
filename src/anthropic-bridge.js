@@ -46,8 +46,13 @@ function extractThinkingText(block) {
   return "";
 }
 
+function normalizeThinkingText(thinkingText) {
+  return toText(thinkingText).replace(/\r\n/g, "\n");
+}
+
 function buildThinkingSignature(thinkingText) {
-  const digest = createHash("sha256").update(toText(thinkingText)).digest("base64");
+  const normalizedThinking = normalizeThinkingText(thinkingText);
+  const digest = createHash("sha256").update(normalizedThinking).digest("base64");
   return `synthetic.${digest}`;
 }
 
@@ -436,6 +441,13 @@ function allocateBlockIndex(state, channel, contentIndex) {
   return next;
 }
 
+function findExistingBlockIndex(state, channel, contentIndex) {
+  const normalizedContentIndex = Number.isFinite(contentIndex) ? contentIndex : 0;
+  const key = blockKey(channel, normalizedContentIndex);
+  const existing = state.openBlockIndexByKey.get(key);
+  return typeof existing === "number" ? existing : null;
+}
+
 function releaseBlockIndex(state, index) {
   const key = state.keyByBlockIndex.get(index);
   if (typeof key === "string") {
@@ -485,6 +497,7 @@ function closeOpenBlocks(state, records) {
   state.openBlockIndexByKey.clear();
   state.keyByBlockIndex.clear();
   state.pendingTextContentIndexes.clear();
+  state.thinkingTextByBlockIndex.clear();
 }
 
 export function createAnthropicStreamState(params) {
@@ -570,7 +583,10 @@ export function convertPiEventToAnthropicSseRecords(event, state) {
   if (kind === "thinking_end") {
     ensureMessageStart(state, records);
     const contentIndex = Number(event.contentIndex) || 0;
-    const index = allocateBlockIndex(state, "thinking", contentIndex);
+    const index = findExistingBlockIndex(state, "thinking", contentIndex);
+    if (index == null) {
+      return records;
+    }
     if (!state.openBlocks.has(index) && !state.thinkingTextByBlockIndex.has(index)) {
       releaseBlockIndex(state, index);
       return records;
@@ -631,20 +647,22 @@ export function convertPiEventToAnthropicSseRecords(event, state) {
   if (kind === "text_end") {
     ensureMessageStart(state, records);
     const contentIndex = Number(event.contentIndex) || 0;
-    const index = allocateBlockIndex(state, "text", contentIndex);
+    const index = findExistingBlockIndex(state, "text", contentIndex);
+    if (index == null) {
+      state.pendingTextContentIndexes.delete(contentIndex);
+      return records;
+    }
     if (!state.openBlocks.has(index)) {
       state.pendingTextContentIndexes.delete(contentIndex);
       releaseBlockIndex(state, index);
       return records;
     }
-    if (state.openBlocks.has(index)) {
-      state.openBlocks.delete(index);
-      releaseBlockIndex(state, index);
-      records.push({
-        event: "content_block_stop",
-        data: { type: "content_block_stop", index }
-      });
-    }
+    state.openBlocks.delete(index);
+    releaseBlockIndex(state, index);
+    records.push({
+      event: "content_block_stop",
+      data: { type: "content_block_stop", index }
+    });
     return records;
   }
 
@@ -706,7 +724,8 @@ export function convertPiEventToAnthropicSseRecords(event, state) {
   if (kind === "toolcall_end") {
     ensureMessageStart(state, records);
     const contentIndex = Number(event.contentIndex) || 0;
-    const index = allocateBlockIndex(state, "tool", contentIndex);
+    const existingIndex = findExistingBlockIndex(state, "tool", contentIndex);
+    const index = existingIndex ?? allocateBlockIndex(state, "tool", contentIndex);
     const toolCall = readToolCallFromEvent(event);
     const knownMeta = state.toolMetaByBlockIndex.get(index);
     const name = toText(toolCall?.name || knownMeta?.name || "tool");

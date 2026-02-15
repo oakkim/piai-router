@@ -179,3 +179,69 @@ test("convertPiEventToAnthropicSseRecords suppresses thinking when configured", 
   const records = events.flatMap((event) => convertPiEventToAnthropicSseRecords(event, state));
   assert.equal(records.length, 0);
 });
+
+test("thinking signature is deterministic across newline variants in stream", () => {
+  const buildSignature = (thinking) => {
+    const state = createAnthropicStreamState({ model: "claude-sonnet-4-5", messageId: "msg_sig" });
+    const events = [
+      { type: "start" },
+      { type: "thinking_start", contentIndex: 0 },
+      { type: "thinking_delta", contentIndex: 0, delta: thinking },
+      { type: "thinking_end", contentIndex: 0 },
+      { type: "done", reason: "stop", message: { usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } } }
+    ];
+    const records = events.flatMap((event) => convertPiEventToAnthropicSseRecords(event, state));
+    const signatureRecord = records.find(
+      (record) =>
+        record.event === "content_block_delta" &&
+        record.data?.delta?.type === "signature_delta"
+    );
+    return signatureRecord?.data?.delta?.signature;
+  };
+
+  const sigCrLf = buildSignature("line1\r\nline2");
+  const sigLf = buildSignature("line1\nline2");
+
+  assert.equal(sigCrLf, sigLf);
+});
+
+test("done event closes open blocks and emits stops for unfinished channels", () => {
+  const state = createAnthropicStreamState({ model: "claude-sonnet-4-5", messageId: "msg_done_cleanup" });
+  const events = [
+    { type: "start" },
+    { type: "thinking_start", contentIndex: 0 },
+    { type: "thinking_delta", contentIndex: 0, delta: "partial" },
+    {
+      type: "toolcall_start",
+      contentIndex: 1,
+      partial: { content: [{ type: "toolCall", id: "call_cleanup", name: "Bash", arguments: {} }] }
+    },
+    { type: "done", reason: "stop", message: { usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } } }
+  ];
+
+  const records = events.flatMap((event) => convertPiEventToAnthropicSseRecords(event, state));
+  const stops = records.filter((record) => record.event === "content_block_stop");
+
+  // Both thinking and tool blocks should be stopped even without explicit *_end events
+  assert.ok(stops.length >= 2);
+});
+
+test("toolcall_end without prior start still emits start and stop once", () => {
+  const state = createAnthropicStreamState({ model: "claude-sonnet-4-5", messageId: "msg_tool_end_only" });
+  const events = [
+    { type: "start" },
+    {
+      type: "toolcall_end",
+      contentIndex: 0,
+      toolCall: { type: "toolCall", id: "call_end_only", name: "Bash", arguments: { command: "ls" } }
+    },
+    { type: "done", reason: "stop", message: { usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } } }
+  ];
+
+  const records = events.flatMap((event) => convertPiEventToAnthropicSseRecords(event, state));
+  const starts = records.filter((record) => record.event === "content_block_start");
+  const stops = records.filter((record) => record.event === "content_block_stop");
+
+  assert.equal(starts.length, 1);
+  assert.equal(stops.length >= 1, true);
+});
