@@ -1,20 +1,12 @@
-import fs from "node:fs";
 import path from "node:path";
+import { createLogWriter } from "./log-writer.js";
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function ensureDir(dirPath) {
-  fs.mkdirSync(dirPath, { recursive: true });
-}
-
 function nowIso() {
   return new Date().toISOString();
-}
-
-function writeJsonLine(filePath, entry) {
-  fs.appendFileSync(filePath, `${JSON.stringify(entry)}\n`, "utf-8");
 }
 
 function resolveLoggingConfig(config) {
@@ -23,7 +15,11 @@ function resolveLoggingConfig(config) {
   const serverEnabled = enabled && logging.server !== false;
   const conversationEnabled = enabled && logging.conversation !== false;
   const dir = path.resolve(typeof logging.dir === "string" && logging.dir.trim() ? logging.dir : "./logs");
-  return { enabled, serverEnabled, conversationEnabled, dir };
+  const maxQueueSize =
+    typeof logging.maxQueueSize === "number" && Number.isFinite(logging.maxQueueSize) && logging.maxQueueSize > 0
+      ? Math.floor(logging.maxQueueSize)
+      : 5000;
+  return { enabled, serverEnabled, conversationEnabled, dir, maxQueueSize };
 }
 
 export function createGatewayLogger(config) {
@@ -31,13 +27,19 @@ export function createGatewayLogger(config) {
   const serverFile = path.join(logging.dir, "server.log.jsonl");
   const conversationFile = path.join(logging.dir, "conversation.log.jsonl");
 
-  if (logging.enabled) {
-    ensureDir(logging.dir);
-  }
+  const writer = logging.enabled
+    ? createLogWriter({
+        dir: logging.dir,
+        maxQueueSize: logging.maxQueueSize
+      })
+    : null;
 
   const safeWrite = (target, entry) => {
+    if (!writer) {
+      return;
+    }
     try {
-      writeJsonLine(target, entry);
+      writer.enqueue(target, `${JSON.stringify(entry)}\n`);
     } catch {
       // Logging must never break request handling.
     }
@@ -57,6 +59,35 @@ export function createGatewayLogger(config) {
     safeWrite(conversationFile, { ts: nowIso(), event, ...data });
   };
 
+  const flush = async () => {
+    if (!writer) {
+      return;
+    }
+    try {
+      await writer.flush();
+    } catch {
+      // Logging must never break request handling.
+    }
+  };
+
+  const close = async () => {
+    if (!writer) {
+      return;
+    }
+    try {
+      await writer.close();
+    } catch {
+      // Logging must never break request handling.
+    }
+  };
+
+  const getDroppedCount = () => {
+    if (!writer) {
+      return 0;
+    }
+    return writer.getDroppedCount();
+  };
+
   return {
     enabled: logging.enabled,
     serverEnabled: logging.serverEnabled,
@@ -65,7 +96,10 @@ export function createGatewayLogger(config) {
     serverFile,
     conversationFile,
     server,
-    conversation
+    conversation,
+    flush,
+    close,
+    getDroppedCount
   };
 }
 

@@ -36,7 +36,7 @@ export function createServer(config, options = {}) {
       });
     });
 
-    pipeline({ req, res, config, runner, logger, ...contextMeta }).catch((error) => {
+    pipeline({ req, res, config, runner, logger, ...contextMeta }).catch(async (error) => {
       const message = error instanceof Error ? error.message : String(error);
       logger.server("http_pipeline_error", {
         requestId: contextMeta.requestId,
@@ -54,6 +54,9 @@ export function createServer(config, options = {}) {
         );
       } else {
         res.end();
+      }
+      if (typeof logger.flush === "function") {
+        await logger.flush();
       }
     });
   });
@@ -76,8 +79,12 @@ export function startServer(config = loadConfig()) {
   });
   server.on("close", () => {
     logger.server("server_stop", {
-      port: config.port
+      port: config.port,
+      droppedLogs: typeof logger.getDroppedCount === "function" ? logger.getDroppedCount() : 0
     });
+    if (typeof logger.close === "function") {
+      void logger.close();
+    }
   });
   return server;
 }
