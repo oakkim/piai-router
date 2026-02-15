@@ -108,6 +108,20 @@ test("loadConfig lets environment override file config", () => {
   assert.equal(config.http.requestTimeoutMs, 65000);
 });
 
+test("loadConfig prefers ROUTER_API_KEY and falls back to GATEWAY_API_KEY", () => {
+  const fromRouter = loadConfig({ ROUTER_API_KEY: "router-secret" });
+  assert.equal(fromRouter.gatewayApiKey, "router-secret");
+
+  const fromGateway = loadConfig({ GATEWAY_API_KEY: "gateway-secret" });
+  assert.equal(fromGateway.gatewayApiKey, "gateway-secret");
+
+  const routerWins = loadConfig({
+    ROUTER_API_KEY: "router-secret",
+    GATEWAY_API_KEY: "gateway-secret"
+  });
+  assert.equal(routerWins.gatewayApiKey, "router-secret");
+});
+
 test("loadConfig merges model map from file and env", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "piai-gateway-model-map-"));
   const configPath = path.join(tempDir, "gateway.json");
@@ -207,7 +221,7 @@ test("loadConfig rejects out-of-range port", () => {
   assert.throws(() => loadConfig({}, { configPath }), /Invalid port/);
 });
 
-test("resolveConfigPath uses default filename when omitted", () => {
+test("resolveConfigPath uses home default path when omitted", () => {
   const resolved = resolveConfigPath("", "/tmp/example");
-  assert.equal(resolved, path.resolve("/tmp/example", "piai-gateway.config.json"));
+  assert.equal(resolved, path.resolve(os.homedir(), ".pirouter", "config.json"));
 });

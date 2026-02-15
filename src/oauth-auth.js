@@ -104,7 +104,7 @@ export async function resolveOAuthApiKey(config) {
 
   if (!result || typeof result.apiKey !== "string" || !result.apiKey) {
     throw new Error(
-      `OAuth credentials not found for provider "${provider}". Run "cli login ${provider}" first.`
+      `OAuth credentials not found for provider "${provider}". Run "pirouter login ${provider}" first.`
     );
   }
 

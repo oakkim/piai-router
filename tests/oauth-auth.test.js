@@ -12,7 +12,7 @@ import {
 
 test("resolveAuthFilePath resolves relative to config file directory", () => {
   const config = {
-    configPath: "/tmp/work/piai-gateway.config.json",
+    configPath: "/tmp/work/piai-router.config.json",
     upstream: { authFile: "./auth/piai-auth.json" }
   };
   const resolved = resolveAuthFilePath(config);

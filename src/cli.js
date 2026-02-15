@@ -1,7 +1,11 @@
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { loadConfig } from "./config.js";
-import { readConfigFile, resolveConfigPath, writeConfigFile } from "./config-store.js";
+import {
+  readConfigFile,
+  resolveConfigPath,
+  writeConfigFile,
+} from "./config-store.js";
 import { getOAuthProvider, runOAuthLogin } from "./oauth-auth.js";
 
 function isRecord(value) {
@@ -19,26 +23,46 @@ function normalizeProviderConfigShape(input, providerId) {
   const source = isRecord(input) ? input : {};
   const resolvedProvider = normalizeProviderId(providerId) || "openai-codex";
   return {
-    api: typeof source.api === "string" && source.api.trim() ? source.api.trim() : "openai-codex-responses",
-    authMode: typeof source.authMode === "string" && source.authMode.trim() ? source.authMode.trim() : "apiKey",
+    api:
+      typeof source.api === "string" && source.api.trim()
+        ? source.api.trim()
+        : "openai-codex-responses",
+    authMode:
+      typeof source.authMode === "string" && source.authMode.trim()
+        ? source.authMode.trim()
+        : "apiKey",
     oauthProvider:
       typeof source.oauthProvider === "string" && source.oauthProvider.trim()
         ? source.oauthProvider.trim()
         : resolvedProvider,
     authFile:
-      typeof source.authFile === "string" && source.authFile.trim() ? source.authFile.trim() : "./piai-auth.json",
-    baseUrl: typeof source.baseUrl === "string" && source.baseUrl.trim() ? source.baseUrl.trim() : "",
+      typeof source.authFile === "string" && source.authFile.trim()
+        ? source.authFile.trim()
+        : "./piai-auth.json",
+    baseUrl:
+      typeof source.baseUrl === "string" && source.baseUrl.trim()
+        ? source.baseUrl.trim()
+        : "",
     apiKey: typeof source.apiKey === "string" ? source.apiKey : "",
-    defaultModel: typeof source.defaultModel === "string" && source.defaultModel.trim() ? source.defaultModel.trim() : "",
-    reasoning: source.reasoning === undefined ? true : Boolean(source.reasoning),
+    defaultModel:
+      typeof source.defaultModel === "string" && source.defaultModel.trim()
+        ? source.defaultModel.trim()
+        : "",
+    reasoning:
+      source.reasoning === undefined ? true : Boolean(source.reasoning),
     input:
       Array.isArray(source.input) && source.input.length > 0
         ? source.input.map((item) => String(item || "").trim()).filter(Boolean)
         : ["text", "image"],
     contextWindow:
-      typeof source.contextWindow === "number" && source.contextWindow > 0 ? source.contextWindow : 128000,
-    maxTokens: typeof source.maxTokens === "number" && source.maxTokens > 0 ? source.maxTokens : 128000,
-    headers: isRecord(source.headers) ? source.headers : {}
+      typeof source.contextWindow === "number" && source.contextWindow > 0
+        ? source.contextWindow
+        : 128000,
+    maxTokens:
+      typeof source.maxTokens === "number" && source.maxTokens > 0
+        ? source.maxTokens
+        : 128000,
+    headers: isRecord(source.headers) ? source.headers : {},
   };
 }
 
@@ -57,13 +81,17 @@ function ensureActiveProviderConfig(current) {
   if (!isRecord(current.providers)) {
     current.providers = {};
   }
-  const source = isRecord(current.providers[provider]) ? current.providers[provider] : current.upstream;
+  const source = isRecord(current.providers[provider])
+    ? current.providers[provider]
+    : current.upstream;
   current.providers[provider] = normalizeProviderConfigShape(source, provider);
   return current.providers[provider];
 }
 
 function parseBooleanInput(raw, fallback) {
-  const value = String(raw || "").trim().toLowerCase();
+  const value = String(raw || "")
+    .trim()
+    .toLowerCase();
   if (!value) {
     return fallback;
   }
@@ -85,7 +113,8 @@ function parseNumberInput(raw, fallback) {
 }
 
 function normalizeAuthDisplay(authPayload, instructions) {
-  const auth = authPayload && typeof authPayload === "object" ? authPayload : null;
+  const auth =
+    authPayload && typeof authPayload === "object" ? authPayload : null;
   const url =
     (auth && typeof auth.url === "string" && auth.url) ||
     (typeof authPayload === "string" ? authPayload : "");
@@ -132,10 +161,12 @@ async function askBoolean(rl, label, current) {
 function sanitizeConfigForDisplay(config) {
   const providers = {};
   if (isRecord(config.providers)) {
-    for (const [providerId, providerConfig] of Object.entries(config.providers)) {
+    for (const [providerId, providerConfig] of Object.entries(
+      config.providers,
+    )) {
       providers[providerId] = {
         ...(isRecord(providerConfig) ? providerConfig : {}),
-        apiKey: providerConfig?.apiKey ? "<hidden>" : ""
+        apiKey: providerConfig?.apiKey ? "<hidden>" : "",
       };
     }
   }
@@ -145,8 +176,8 @@ function sanitizeConfigForDisplay(config) {
     providers,
     upstream: {
       ...config.upstream,
-      apiKey: config.upstream.apiKey ? "<hidden>" : ""
-    }
+      apiKey: config.upstream.apiKey ? "<hidden>" : "",
+    },
   };
 }
 
@@ -154,11 +185,13 @@ function resolveHttpConfig(config) {
   const source = isRecord(config?.http) ? config.http : {};
   return {
     maxBodyBytes:
-      typeof source.maxBodyBytes === "number" && source.maxBodyBytes > 0 ? source.maxBodyBytes : 1024 * 1024,
+      typeof source.maxBodyBytes === "number" && source.maxBodyBytes > 0
+        ? source.maxBodyBytes
+        : 1024 * 1024,
     requestTimeoutMs:
       typeof source.requestTimeoutMs === "number" && source.requestTimeoutMs > 0
         ? source.requestTimeoutMs
-        : 30_000
+        : 30_000,
   };
 }
 
@@ -166,16 +199,24 @@ function toConfigFileShape(config) {
   const provider = resolveActiveProvider(config);
   const providers = {};
   if (isRecord(config.providers)) {
-    for (const [providerId, providerConfig] of Object.entries(config.providers)) {
+    for (const [providerId, providerConfig] of Object.entries(
+      config.providers,
+    )) {
       const normalizedId = normalizeProviderId(providerId);
       if (!normalizedId) {
         continue;
       }
-      providers[normalizedId] = normalizeProviderConfigShape(providerConfig, normalizedId);
+      providers[normalizedId] = normalizeProviderConfigShape(
+        providerConfig,
+        normalizedId,
+      );
     }
   }
   if (!providers[provider]) {
-    providers[provider] = normalizeProviderConfigShape(config.upstream, provider);
+    providers[provider] = normalizeProviderConfigShape(
+      config.upstream,
+      provider,
+    );
   }
 
   return {
@@ -188,10 +229,10 @@ function toConfigFileShape(config) {
       enabled: config.logging.enabled,
       server: config.logging.server,
       conversation: config.logging.conversation,
-      dir: config.logging.dir
+      dir: config.logging.dir,
     },
     http: resolveHttpConfig(config),
-    providers
+    providers,
   };
 }
 
@@ -212,7 +253,7 @@ export function parseCliArgs(argv = []) {
   return {
     command: positional[0] || "help",
     configPath,
-    rawArgs: positional.slice(1)
+    rawArgs: positional.slice(1),
   };
 }
 
@@ -223,63 +264,94 @@ async function runUi(configPath) {
 
   const rl = createInterface({ input: stdin, output: stdout });
   try {
-    stdout.write(`\n[piai-gateway] Config UI\n`);
+    stdout.write(`\n[piai-router] Config UI\n`);
     stdout.write(`Config file: ${path}\n\n`);
 
     current.port = await askNumber(rl, "Port", current.port);
     current.debug = await askBoolean(rl, "Debug mode", current.debug);
     current.provider = await askString(rl, "Active provider", current.provider);
     const activeConfig = ensureActiveProviderConfig(current);
-    current.logging.enabled = await askBoolean(rl, "Enable file logging", current.logging.enabled);
-    current.logging.server = await askBoolean(rl, "Enable server log", current.logging.server);
+    current.logging.enabled = await askBoolean(
+      rl,
+      "Enable file logging",
+      current.logging.enabled,
+    );
+    current.logging.server = await askBoolean(
+      rl,
+      "Enable server log",
+      current.logging.server,
+    );
     current.logging.conversation = await askBoolean(
       rl,
       "Enable conversation log",
-      current.logging.conversation
+      current.logging.conversation,
     );
-    current.logging.dir = await askString(rl, "Log directory", current.logging.dir);
+    current.logging.dir = await askString(
+      rl,
+      "Log directory",
+      current.logging.dir,
+    );
     current.http.maxBodyBytes = await askNumber(
       rl,
       "Max request body bytes",
-      current.http.maxBodyBytes
+      current.http.maxBodyBytes,
     );
     current.http.requestTimeoutMs = await askNumber(
       rl,
       "Request timeout (ms)",
-      current.http.requestTimeoutMs
+      current.http.requestTimeoutMs,
     );
 
     activeConfig.api = await askString(rl, "pi-ai API kind", activeConfig.api);
     activeConfig.authMode = await askString(
       rl,
       "Auth mode (apiKey/oauth)",
-      activeConfig.authMode || "apiKey"
+      activeConfig.authMode || "apiKey",
     );
     activeConfig.oauthProvider = await askString(
       rl,
       "OAuth provider",
-      activeConfig.oauthProvider || current.provider
+      activeConfig.oauthProvider || current.provider,
     );
     activeConfig.authFile = await askString(
       rl,
       "OAuth auth file",
-      activeConfig.authFile || "./piai-auth.json"
+      activeConfig.authFile || "./piai-auth.json",
     );
-    activeConfig.baseUrl = await askString(rl, "Provider base URL", activeConfig.baseUrl);
-    activeConfig.defaultModel = await askString(rl, "Default model", activeConfig.defaultModel);
+    activeConfig.baseUrl = await askString(
+      rl,
+      "Provider base URL",
+      activeConfig.baseUrl,
+    );
+    activeConfig.defaultModel = await askString(
+      rl,
+      "Default model",
+      activeConfig.defaultModel,
+    );
     if (activeConfig.authMode !== "oauth") {
-      activeConfig.apiKey = await askString(rl, "Provider API key", activeConfig.apiKey, {
-        secret: true
-      });
+      activeConfig.apiKey = await askString(
+        rl,
+        "Provider API key",
+        activeConfig.apiKey,
+        {
+          secret: true,
+        },
+      );
     } else {
       activeConfig.apiKey = "";
     }
-    activeConfig.reasoning = await askBoolean(rl, "Enable reasoning", activeConfig.reasoning);
+    activeConfig.reasoning = await askBoolean(
+      rl,
+      "Enable reasoning",
+      activeConfig.reasoning,
+    );
 
     const inputRaw = await askString(
       rl,
       "Input types (comma-separated)",
-      Array.isArray(activeConfig.input) ? activeConfig.input.join(",") : "text,image"
+      Array.isArray(activeConfig.input)
+        ? activeConfig.input.join(",")
+        : "text,image",
     );
     activeConfig.input = inputRaw
       .split(",")
@@ -289,14 +361,19 @@ async function runUi(configPath) {
       activeConfig.input = ["text", "image"];
     }
 
-    current.gatewayApiKey = await askString(rl, "Gateway API key (optional)", current.gatewayApiKey, {
-      secret: true
-    });
+    current.gatewayApiKey = await askString(
+      rl,
+      "Router API key (optional)",
+      current.gatewayApiKey,
+      {
+        secret: true,
+      },
+    );
 
     const editModelMap = await askBoolean(rl, "Edit model map JSON now", false);
     if (editModelMap) {
       stdout.write(
-        "Enter model map JSON in one line (example: {\"openai-codex:claude-sonnet-4-5\":\"gpt-5.1-codex-mini\"})\n"
+        'Enter model map JSON in one line (example: {"openai-codex:claude-sonnet-4-5":"gpt-5.1-codex-mini"})\n',
       );
       const raw = (await rl.question("modelMap JSON: ")).trim();
       if (raw) {
@@ -305,7 +382,9 @@ async function runUi(configPath) {
           if (isRecord(parsed)) {
             current.modelMap = parsed;
           } else {
-            stdout.write("Invalid modelMap JSON object. Keeping current value.\n");
+            stdout.write(
+              "Invalid modelMap JSON object. Keeping current value.\n",
+            );
           }
         } catch {
           stdout.write("Invalid JSON. Keeping current value.\n");
@@ -332,16 +411,22 @@ async function runUi(configPath) {
       await runOAuthLoginWithPrompt(cfg, cfg.upstream.oauthProvider);
     }
   }
-  stdout.write("Run `cli start` to start the gateway with this config.\n");
+  stdout.write("Run `pirouter start` to start the gateway with this config.\n");
 }
 
 function runShow(configPath) {
-  const config = loadConfig(process.env, { configPath: resolveConfigPath(configPath) });
-  stdout.write(`${JSON.stringify(sanitizeConfigForDisplay(config), null, 2)}\n`);
+  const config = loadConfig(process.env, {
+    configPath: resolveConfigPath(configPath),
+  });
+  stdout.write(
+    `${JSON.stringify(sanitizeConfigForDisplay(config), null, 2)}\n`,
+  );
 }
 
 async function runStart(configPath) {
-  const config = loadConfig(process.env, { configPath: resolveConfigPath(configPath) });
+  const config = loadConfig(process.env, {
+    configPath: resolveConfigPath(configPath),
+  });
   const { startServer } = await import("./server.js");
   startServer(config);
 }
@@ -371,7 +456,9 @@ async function runOAuthLoginWithPrompt(config, explicitProvider) {
       },
       onPrompt: async (prompt) => {
         const message =
-          prompt && typeof prompt === "object" && typeof prompt.message === "string"
+          prompt &&
+          typeof prompt === "object" &&
+          typeof prompt.message === "string"
             ? prompt.message
             : "Enter code";
         const answer = await rl.question(`${message}: `);
@@ -379,7 +466,7 @@ async function runOAuthLoginWithPrompt(config, explicitProvider) {
       },
       onProgress: (message) => {
         stdout.write(`${String(message)}\n`);
-      }
+      },
     });
 
     stdout.write(`OAuth login success: provider=${result.provider}\n`);
@@ -390,8 +477,13 @@ async function runOAuthLoginWithPrompt(config, explicitProvider) {
 }
 
 async function runLogin(configPath, providerArg) {
-  const config = loadConfig(process.env, { configPath: resolveConfigPath(configPath) });
-  await runOAuthLoginWithPrompt(config, providerArg || config.upstream.oauthProvider);
+  const config = loadConfig(process.env, {
+    configPath: resolveConfigPath(configPath),
+  });
+  await runOAuthLoginWithPrompt(
+    config,
+    providerArg || config.upstream.oauthProvider,
+  );
 }
 
 function runInit(configPath) {
@@ -406,14 +498,22 @@ function runInit(configPath) {
 }
 
 function printHelp() {
-  stdout.write(`piai-gateway CLI\n\n`);
+  stdout.write(`piai-router CLI\n\n`);
   stdout.write(`Usage:\n`);
-  stdout.write(`  cli ui [--config <path>]      # interactive provider setup UI\n`);
-  stdout.write(`  cli start [--config <path>]   # start gateway server\n`);
-  stdout.write(`  cli show [--config <path>]    # show effective config\n`);
-  stdout.write(`  cli init [--config <path>]    # create config file with defaults\n`);
-  stdout.write(`  cli login [provider] [--config <path>] # OAuth login and save credentials\n`);
-  stdout.write(`  cli help\n`);
+  stdout.write(
+    `  pirouter ui [--config <path>]      # interactive provider setup UI\n`,
+  );
+  stdout.write(`  pirouter start [--config <path>]   # start gateway server\n`);
+  stdout.write(
+    `  pirouter show [--config <path>]    # show effective config\n`,
+  );
+  stdout.write(
+    `  pirouter init [--config <path>]    # create config file with defaults\n`,
+  );
+  stdout.write(
+    `  pirouter login [provider] [--config <path>] # OAuth login and save credentials\n`,
+  );
+  stdout.write(`  pirouter help\n`);
 }
 
 export async function runCli(argv = process.argv.slice(2)) {
@@ -443,5 +543,5 @@ export async function runCli(argv = process.argv.slice(2)) {
 
 export const _internal = {
   normalizeAuthDisplay,
-  resolveHttpConfig
+  resolveHttpConfig,
 };

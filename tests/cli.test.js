@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { _internal, parseCliArgs } from "../src/cli.js";
+import { runCli, _internal, parseCliArgs } from "../src/cli.js";
 
 test("parseCliArgs parses command and config path", () => {
   const parsed = parseCliArgs(["ui", "--config", "./custom.json"]);
@@ -52,4 +52,31 @@ test("resolveHttpConfig keeps valid values", () => {
   });
   assert.equal(http.maxBodyBytes, 2048);
   assert.equal(http.requestTimeoutMs, 45000);
+});
+
+test("runCli help prints pirouter command names", async () => {
+  const writes = [];
+  const originalWrite = process.stdout.write;
+
+  process.stdout.write = (chunk, encoding, callback) => {
+    writes.push(String(chunk));
+    if (typeof encoding === "function") {
+      encoding();
+    } else if (typeof callback === "function") {
+      callback();
+    }
+    return true;
+  };
+
+  try {
+    const code = await runCli(["help"]);
+    assert.equal(code, 0);
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+
+  const output = writes.join("");
+  assert.match(output, /piai-router CLI/);
+  assert.match(output, /pirouter start/);
+  assert.match(output, /pirouter login/);
 });

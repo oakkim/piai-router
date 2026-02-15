@@ -1,15 +1,16 @@
 {
-  "name": "piai-gateway",
+  "name": "piai-router",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.5.2",
-  "description": "Anthropic-compatible gateway backed by @mariozechner/pi-ai",
+  "description": "Anthropic-compatible router backed by @mariozechner/pi-ai",
   "bin": {
-    "cli": "./bin/cli.js"
+    "pirouter": "./bin/cli.js"
   },
   "scripts": {
     "start": "node ./bin/cli.js start",
+    "pirouter": "node ./bin/cli.js",
     "cli": "node ./bin/cli.js",
     "test": "node --test"
   },

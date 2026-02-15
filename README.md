@@ -1,4 +1,4 @@
-# piai-gateway
+# piai-router
 
 `@mariozechner/pi-ai`를 백엔드로 사용해 Claude API(`Anthropic Messages`) 호환 엔드포인트를 제공하는 경량 게이트웨이입니다.
 
@@ -19,27 +19,27 @@ pnpm install
 
 ## CLI UI 설정
 
-기본 설정 파일은 `piai-gateway.config.json` 입니다.
+기본 설정 파일은 `~/.pirouter/config.json` 입니다.
 
 ```bash
 # 인터랙티브 UI
-pnpm cli ui
+pnpm pirouter ui
 
 # 설정 확인
-pnpm cli show
+pnpm pirouter show
 
 # 서버 실행
-pnpm cli start
+pnpm pirouter start
 
 # OAuth 로그인 (예: codex)
-pnpm cli login openai-codex
+pnpm pirouter login openai-codex
 ```
 
-글로벌로 `cli ui` 형태로 쓰려면:
+글로벌로 `pirouter ui` 형태로 쓰려면:
 
 ```bash
 pnpm link --global
-cli ui
+pirouter ui
 ```
 
 ## 실행
@@ -92,7 +92,7 @@ pnpm start
 로그인:
 
 ```bash
-cli login openai-codex
+pirouter login openai-codex
 ```
 
 설정 환경변수:
@@ -159,14 +159,14 @@ PIAI_REQUEST_TIMEOUT_MS=30000
 
 ```bash
 export ANTHROPIC_BASE_URL=http://localhost:8787
-export ANTHROPIC_API_KEY=any-value-or-gateway-key
+export ANTHROPIC_API_KEY=any-value-or-router-key
 ```
 
-`GATEWAY_API_KEY`를 설정한 경우에는 `ANTHROPIC_API_KEY` 값을 동일하게 맞추세요.
+`ROUTER_API_KEY`를 설정한 경우에는 `ANTHROPIC_API_KEY` 값을 동일하게 맞추세요.
 
 ## 모델 치환
 
-`piai-gateway.config.json` 또는 `MODEL_MAP_JSON` 예시:
+`~/.pirouter/config.json` 또는 `MODEL_MAP_JSON` 예시:
 
 ```json
 {

@@ -29,7 +29,7 @@ function defaultProviderConfig(providerId = DEFAULT_PROVIDER) {
     input: ["text", "image"],
     contextWindow: 128000,
     maxTokens: 128000,
-    headers: {}
+    headers: {},
   };
 }
 
@@ -47,16 +47,16 @@ function defaultConfig() {
       enabled: false,
       server: true,
       conversation: true,
-      dir: "./logs"
+      dir: "./logs",
     },
     http: {
       maxBodyBytes: 1024 * 1024,
-      requestTimeoutMs: 30_000
+      requestTimeoutMs: 30_000,
     },
     providers: {
-      [provider]: upstream
+      [provider]: upstream,
     },
-    upstream
+    upstream,
   };
 }
 
@@ -117,7 +117,10 @@ function mergeProviderConfig(target, candidate, fallbackProvider) {
   if (typeof candidate.authMode === "string" && candidate.authMode.trim()) {
     target.authMode = candidate.authMode.trim();
   }
-  if (typeof candidate.oauthProvider === "string" && candidate.oauthProvider.trim()) {
+  if (
+    typeof candidate.oauthProvider === "string" &&
+    candidate.oauthProvider.trim()
+  ) {
     target.oauthProvider = candidate.oauthProvider.trim();
   }
   if (typeof candidate.authFile === "string" && candidate.authFile.trim()) {
@@ -129,7 +132,10 @@ function mergeProviderConfig(target, candidate, fallbackProvider) {
   if (typeof candidate.apiKey === "string") {
     target.apiKey = candidate.apiKey;
   }
-  if (typeof candidate.defaultModel === "string" && candidate.defaultModel.trim()) {
+  if (
+    typeof candidate.defaultModel === "string" &&
+    candidate.defaultModel.trim()
+  ) {
     target.defaultModel = candidate.defaultModel.trim();
   }
   target.reasoning = parseBoolean(candidate.reasoning, target.reasoning);
@@ -143,19 +149,26 @@ function mergeProviderConfig(target, candidate, fallbackProvider) {
       target.input = normalized;
     }
   }
-  target.contextWindow = parseNumber(candidate.contextWindow, target.contextWindow);
+  target.contextWindow = parseNumber(
+    candidate.contextWindow,
+    target.contextWindow,
+  );
   target.maxTokens = parseNumber(candidate.maxTokens, target.maxTokens);
   if (isRecord(candidate.headers)) {
     target.headers = { ...target.headers, ...candidate.headers };
   }
-  target.provider = normalizeProviderId(target.provider) || normalizeProviderId(fallbackProvider) || DEFAULT_PROVIDER;
+  target.provider =
+    normalizeProviderId(target.provider) ||
+    normalizeProviderId(fallbackProvider) ||
+    DEFAULT_PROVIDER;
   if (!target.oauthProvider) {
     target.oauthProvider = target.provider;
   }
 }
 
 function ensureProviderConfig(config, providerId) {
-  const normalizedProvider = normalizeProviderId(providerId) || DEFAULT_PROVIDER;
+  const normalizedProvider =
+    normalizeProviderId(providerId) || DEFAULT_PROVIDER;
   if (!isRecord(config.providers)) {
     config.providers = {};
   }
@@ -171,7 +184,7 @@ function ensureProviderConfig(config, providerId) {
   config.providers[normalizedProvider] = base;
   return {
     providerId: normalizedProvider,
-    providerConfig: base
+    providerConfig: base,
   };
 }
 
@@ -207,16 +220,28 @@ function mergeConfigWithObject(config, candidate) {
   }
 
   const logging = isRecord(candidate.logging) ? candidate.logging : {};
-  config.logging.enabled = parseBoolean(logging.enabled, config.logging.enabled);
+  config.logging.enabled = parseBoolean(
+    logging.enabled,
+    config.logging.enabled,
+  );
   config.logging.server = parseBoolean(logging.server, config.logging.server);
-  config.logging.conversation = parseBoolean(logging.conversation, config.logging.conversation);
+  config.logging.conversation = parseBoolean(
+    logging.conversation,
+    config.logging.conversation,
+  );
   if (typeof logging.dir === "string" && logging.dir.trim()) {
     config.logging.dir = logging.dir.trim();
   }
 
   const http = isRecord(candidate.http) ? candidate.http : {};
-  config.http.maxBodyBytes = parseNumber(http.maxBodyBytes, config.http.maxBodyBytes);
-  config.http.requestTimeoutMs = parseNumber(http.requestTimeoutMs, config.http.requestTimeoutMs);
+  config.http.maxBodyBytes = parseNumber(
+    http.maxBodyBytes,
+    config.http.maxBodyBytes,
+  );
+  config.http.requestTimeoutMs = parseNumber(
+    http.requestTimeoutMs,
+    config.http.requestTimeoutMs,
+  );
 
   const providers = isRecord(candidate.providers) ? candidate.providers : {};
   for (const [rawProviderId, providerCandidate] of Object.entries(providers)) {
@@ -224,7 +249,9 @@ function mergeConfigWithObject(config, candidate) {
       continue;
     }
     const providerId =
-      normalizeProviderId(rawProviderId) || normalizeProviderId(providerCandidate.provider) || DEFAULT_PROVIDER;
+      normalizeProviderId(rawProviderId) ||
+      normalizeProviderId(providerCandidate.provider) ||
+      DEFAULT_PROVIDER;
     const { providerConfig } = ensureProviderConfig(config, providerId);
     mergeProviderConfig(providerConfig, providerCandidate, providerId);
     providerConfig.provider = providerId;
@@ -237,7 +264,10 @@ function mergeConfigWithObject(config, candidate) {
   if (Object.keys(upstream).length > 0) {
     let targetProvider = normalizeProviderId(upstream.provider);
     if (!targetProvider) {
-      targetProvider = normalizeProviderId(config.provider) || normalizeProviderId(config.platform) || DEFAULT_PROVIDER;
+      targetProvider =
+        normalizeProviderId(config.provider) ||
+        normalizeProviderId(config.platform) ||
+        DEFAULT_PROVIDER;
     } else if (!hasExplicitProvider) {
       setActiveProvider(config, targetProvider);
     }
@@ -255,8 +285,12 @@ function mergeConfigWithEnv(config, env) {
   if (env.PORT !== undefined) {
     config.port = parseNumber(env.PORT, config.port);
   }
-  if (env.GATEWAY_API_KEY !== undefined) {
-    config.gatewayApiKey = typeof env.GATEWAY_API_KEY === "string" ? env.GATEWAY_API_KEY : "";
+  if (env.ROUTER_API_KEY !== undefined) {
+    config.gatewayApiKey =
+      typeof env.ROUTER_API_KEY === "string" ? env.ROUTER_API_KEY : "";
+  } else if (env.GATEWAY_API_KEY !== undefined) {
+    config.gatewayApiKey =
+      typeof env.GATEWAY_API_KEY === "string" ? env.GATEWAY_API_KEY : "";
   }
   if (env.DEBUG !== undefined) {
     config.debug = parseBoolean(env.DEBUG, config.debug);
@@ -272,7 +306,9 @@ function mergeConfigWithEnv(config, env) {
 
   const { providerId, providerConfig } = ensureProviderConfig(
     config,
-    normalizeProviderId(config.provider) || normalizeProviderId(config.platform) || DEFAULT_PROVIDER
+    normalizeProviderId(config.provider) ||
+      normalizeProviderId(config.platform) ||
+      DEFAULT_PROVIDER,
   );
 
   if (env.PI_API !== undefined && String(env.PI_API).trim()) {
@@ -281,7 +317,10 @@ function mergeConfigWithEnv(config, env) {
   if (env.PIAI_AUTH_MODE !== undefined && String(env.PIAI_AUTH_MODE).trim()) {
     providerConfig.authMode = String(env.PIAI_AUTH_MODE).trim();
   }
-  if (env.PIAI_OAUTH_PROVIDER !== undefined && String(env.PIAI_OAUTH_PROVIDER).trim()) {
+  if (
+    env.PIAI_OAUTH_PROVIDER !== undefined &&
+    String(env.PIAI_OAUTH_PROVIDER).trim()
+  ) {
     providerConfig.oauthProvider = String(env.PIAI_OAUTH_PROVIDER).trim();
   }
   if (env.PIAI_AUTH_FILE !== undefined && String(env.PIAI_AUTH_FILE).trim()) {
@@ -297,19 +336,34 @@ function mergeConfigWithEnv(config, env) {
     providerConfig.defaultModel = String(env.PI_MODEL).trim();
   }
   if (env.PI_REASONING !== undefined) {
-    providerConfig.reasoning = parseBoolean(env.PI_REASONING, providerConfig.reasoning);
+    providerConfig.reasoning = parseBoolean(
+      env.PI_REASONING,
+      providerConfig.reasoning,
+    );
   }
   if (env.PI_INPUT_TYPES !== undefined) {
-    providerConfig.input = parseStringArray(env.PI_INPUT_TYPES, providerConfig.input);
+    providerConfig.input = parseStringArray(
+      env.PI_INPUT_TYPES,
+      providerConfig.input,
+    );
   }
   if (env.PI_CONTEXT_WINDOW !== undefined) {
-    providerConfig.contextWindow = parseNumber(env.PI_CONTEXT_WINDOW, providerConfig.contextWindow);
+    providerConfig.contextWindow = parseNumber(
+      env.PI_CONTEXT_WINDOW,
+      providerConfig.contextWindow,
+    );
   }
   if (env.PI_MAX_TOKENS !== undefined) {
-    providerConfig.maxTokens = parseNumber(env.PI_MAX_TOKENS, providerConfig.maxTokens);
+    providerConfig.maxTokens = parseNumber(
+      env.PI_MAX_TOKENS,
+      providerConfig.maxTokens,
+    );
   }
   if (env.PI_HEADERS_JSON !== undefined) {
-    providerConfig.headers = parseJson(env.PI_HEADERS_JSON, providerConfig.headers);
+    providerConfig.headers = parseJson(
+      env.PI_HEADERS_JSON,
+      providerConfig.headers,
+    );
   }
   providerConfig.provider = providerId;
   if (!providerConfig.oauthProvider) {
@@ -321,19 +375,34 @@ function mergeConfigWithEnv(config, env) {
     config.modelMap = { ...config.modelMap, ...modelMapJson };
   }
   if (env.PIAI_LOG_ENABLED !== undefined) {
-    config.logging.enabled = parseBoolean(env.PIAI_LOG_ENABLED, config.logging.enabled);
+    config.logging.enabled = parseBoolean(
+      env.PIAI_LOG_ENABLED,
+      config.logging.enabled,
+    );
   } else if (env.LOG_ENABLED !== undefined) {
-    config.logging.enabled = parseBoolean(env.LOG_ENABLED, config.logging.enabled);
+    config.logging.enabled = parseBoolean(
+      env.LOG_ENABLED,
+      config.logging.enabled,
+    );
   }
   if (env.PIAI_LOG_SERVER !== undefined) {
-    config.logging.server = parseBoolean(env.PIAI_LOG_SERVER, config.logging.server);
+    config.logging.server = parseBoolean(
+      env.PIAI_LOG_SERVER,
+      config.logging.server,
+    );
   } else if (env.LOG_SERVER !== undefined) {
     config.logging.server = parseBoolean(env.LOG_SERVER, config.logging.server);
   }
   if (env.PIAI_LOG_CONVERSATION !== undefined) {
-    config.logging.conversation = parseBoolean(env.PIAI_LOG_CONVERSATION, config.logging.conversation);
+    config.logging.conversation = parseBoolean(
+      env.PIAI_LOG_CONVERSATION,
+      config.logging.conversation,
+    );
   } else if (env.LOG_CONVERSATION !== undefined) {
-    config.logging.conversation = parseBoolean(env.LOG_CONVERSATION, config.logging.conversation);
+    config.logging.conversation = parseBoolean(
+      env.LOG_CONVERSATION,
+      config.logging.conversation,
+    );
   }
   if (env.PIAI_LOG_DIR !== undefined && String(env.PIAI_LOG_DIR).trim()) {
     config.logging.dir = String(env.PIAI_LOG_DIR).trim();
@@ -342,10 +411,16 @@ function mergeConfigWithEnv(config, env) {
   }
 
   if (env.PIAI_MAX_BODY_BYTES !== undefined) {
-    config.http.maxBodyBytes = parseNumber(env.PIAI_MAX_BODY_BYTES, config.http.maxBodyBytes);
+    config.http.maxBodyBytes = parseNumber(
+      env.PIAI_MAX_BODY_BYTES,
+      config.http.maxBodyBytes,
+    );
   }
   if (env.PIAI_REQUEST_TIMEOUT_MS !== undefined) {
-    config.http.requestTimeoutMs = parseNumber(env.PIAI_REQUEST_TIMEOUT_MS, config.http.requestTimeoutMs);
+    config.http.requestTimeoutMs = parseNumber(
+      env.PIAI_REQUEST_TIMEOUT_MS,
+      config.http.requestTimeoutMs,
+    );
   }
 }
 
@@ -353,12 +428,16 @@ function finalizeConfig(config) {
   const normalizedProviders = {};
   const rawProviders = isRecord(config.providers) ? config.providers : {};
 
-  for (const [rawProviderId, providerCandidate] of Object.entries(rawProviders)) {
+  for (const [rawProviderId, providerCandidate] of Object.entries(
+    rawProviders,
+  )) {
     if (!isRecord(providerCandidate)) {
       continue;
     }
     const providerId =
-      normalizeProviderId(rawProviderId) || normalizeProviderId(providerCandidate.provider) || DEFAULT_PROVIDER;
+      normalizeProviderId(rawProviderId) ||
+      normalizeProviderId(providerCandidate.provider) ||
+      DEFAULT_PROVIDER;
     const providerConfig = defaultProviderConfig(providerId);
     mergeProviderConfig(providerConfig, providerCandidate, providerId);
     providerConfig.provider = providerId;
@@ -369,11 +448,14 @@ function finalizeConfig(config) {
   }
 
   if (Object.keys(normalizedProviders).length === 0) {
-    normalizedProviders[DEFAULT_PROVIDER] = defaultProviderConfig(DEFAULT_PROVIDER);
+    normalizedProviders[DEFAULT_PROVIDER] =
+      defaultProviderConfig(DEFAULT_PROVIDER);
   }
 
   const activeProvider =
-    normalizeProviderId(config.provider) || normalizeProviderId(config.platform) || DEFAULT_PROVIDER;
+    normalizeProviderId(config.provider) ||
+    normalizeProviderId(config.platform) ||
+    DEFAULT_PROVIDER;
   const resolvedProvider = normalizedProviders[activeProvider]
     ? activeProvider
     : Object.keys(normalizedProviders)[0];
@@ -383,7 +465,7 @@ function finalizeConfig(config) {
   config.platform = resolvedProvider;
   config.upstream = {
     ...normalizedProviders[resolvedProvider],
-    provider: resolvedProvider
+    provider: resolvedProvider,
   };
   if (!config.upstream.oauthProvider) {
     config.upstream.oauthProvider = resolvedProvider;
@@ -391,14 +473,19 @@ function finalizeConfig(config) {
 }
 
 export function loadConfig(env = process.env, options = {}) {
-  const configPath = resolveConfigPath(options.configPath ?? env.PIAI_GATEWAY_CONFIG, options.cwd);
+  const configPath = resolveConfigPath(
+    options.configPath ?? env.PIAI_ROUTER_CONFIG ?? env.PIAI_GATEWAY_CONFIG,
+    options.cwd,
+  );
   const config = defaultConfig();
 
   mergeConfigWithObject(config, readConfigFile(configPath));
   mergeConfigWithEnv(config, env);
 
   if (env.MODEL_MAP_FILE && String(env.MODEL_MAP_FILE).trim()) {
-    const fileModelMap = readConfigFile(resolveConfigPath(String(env.MODEL_MAP_FILE).trim(), options.cwd));
+    const fileModelMap = readConfigFile(
+      resolveConfigPath(String(env.MODEL_MAP_FILE).trim(), options.cwd),
+    );
     if (isRecord(fileModelMap)) {
       config.modelMap = { ...config.modelMap, ...fileModelMap };
     }

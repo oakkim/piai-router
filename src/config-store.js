@@ -1,7 +1,8 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
-export const DEFAULT_CONFIG_FILENAME = "piai-gateway.config.json";
+export const DEFAULT_CONFIG_PATH = path.join(os.homedir(), ".pirouter", "config.json");
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -10,7 +11,7 @@ function isRecord(value) {
 export function resolveConfigPath(configPath, cwd = process.cwd()) {
   const raw = typeof configPath === "string" ? configPath.trim() : "";
   if (!raw) {
-    return path.resolve(cwd, DEFAULT_CONFIG_FILENAME);
+    return DEFAULT_CONFIG_PATH;
   }
   return path.resolve(cwd, raw);
 }
