@@ -1,50 +1,52 @@
 # piai-router
 
-`@mariozechner/pi-ai`를 백엔드로 사용해 Claude API(`Anthropic Messages`) 호환 엔드포인트를 제공하는 경량 게이트웨이입니다.
+English | [한국어](./README.ko.md)
 
-## 핵심 기능
+A lightweight gateway/router that provides Claude API (`Anthropic Messages`) compatible endpoints backed by `@mariozechner/pi-ai`.
+
+## Key Features
 
 - `POST /v1/messages` (stream / non-stream)
-- `POST /v1/messages/count_tokens` (근사치)
+- `POST /v1/messages/count_tokens` (approximate)
 - `GET /v1/models`
-- provider별 모델 치환 (`MODEL_MAP_JSON`, `MODEL_MAP_FILE`, `provider:model` prefix 지원)
-- HTTP 엔진 선택: 기본 `node`, 옵션 `fastify` (`PIAI_HTTP_ENGINE=fastify`)
-- 요청 가드레일: `http.maxBodyBytes`, `http.requestTimeoutMs`
+- Provider-specific model mapping (`MODEL_MAP_JSON`, `MODEL_MAP_FILE`, `provider:model` prefix support)
+- HTTP engine selection: default `node`, optional `fastify` (`PIAI_HTTP_ENGINE=fastify`)
+- Request guardrails: `http.maxBodyBytes`, `http.requestTimeoutMs`
 
-## 설치
+## Install
 
 ```bash
 pnpm install
 ```
 
-## CLI UI 설정
+## CLI Setup
 
-기본 설정 파일은 `~/.pirouter/config.json` 입니다.
+Default config file path is `~/.pirouter/config.json`.
 
 ```bash
-# 인터랙티브 UI
+# Interactive setup
 pnpm pirouter ui
 
-# 설정 확인
+# Show effective config
 pnpm pirouter show
 
-# 서버 실행
+# Start server
 pnpm pirouter start
 
-# OAuth 로그인 (예: codex)
+# OAuth login (example: codex)
 pnpm pirouter login openai-codex
 ```
 
-글로벌로 `pirouter ui` 형태로 쓰려면:
+To use globally as `pirouter`:
 
 ```bash
 pnpm link --global
 pirouter ui
 ```
 
-## 실행
+## Run
 
-### 기본(Node HTTP) 엔진
+### Default (Node HTTP) engine
 
 ```bash
 PI_API_KEY=... \
@@ -56,7 +58,7 @@ PORT=8787 \
 pnpm start
 ```
 
-### Fastify 엔진(옵션)
+### Fastify engine (optional)
 
 ```bash
 PIAI_HTTP_ENGINE=fastify \
@@ -65,13 +67,13 @@ PORT=8787 \
 pnpm start
 ```
 
-환경변수는 설정 파일 값보다 우선합니다.
+Environment variables take precedence over config file values.
 
 ## OAuth (Programmatic)
 
-활성 provider의 `authMode`를 `oauth`로 설정하면, 서버 실행 시 `getOAuthApiKey()`로 API 키를 얻고 만료 시 자동 갱신합니다.
+If the active provider uses `authMode: "oauth"`, the server obtains API keys via `getOAuthApiKey()` and refreshes credentials automatically.
 
-예시:
+Example:
 
 ```json
 {
@@ -89,20 +91,20 @@ pnpm start
 }
 ```
 
-로그인:
+Login:
 
 ```bash
 pirouter login openai-codex
 ```
 
-설정 환경변수:
-- `PIAI_AUTH_MODE` (`apiKey`/`oauth`)
+Related env vars:
+- `PIAI_AUTH_MODE` (`apiKey` / `oauth`)
 - `PIAI_OAUTH_PROVIDER` (`openai-codex`, `anthropic`, `github-copilot`, ...)
-- `PIAI_AUTH_FILE` (OAuth credential 저장 파일)
+- `PIAI_AUTH_FILE` (OAuth credential file path)
 
-## 로그(on/off)
+## Logging (on/off)
 
-설정 파일의 `logging` 섹션에서 제어할 수 있습니다.
+Controlled via the `logging` section in config.
 
 ```json
 {
@@ -116,17 +118,17 @@ pirouter login openai-codex
 }
 ```
 
-- `enabled`: 전체 로그 on/off
-- `server`: 서버 접근/에러 로그 on/off
-- `conversation`: 대화 요청/응답 로그 on/off
-- `dir`: 로그 폴더
-- `maxQueueSize`: 비동기 로그 큐 최대 길이 (초과 시 drop)
+- `enabled`: global logging toggle
+- `server`: server/access/error logs toggle
+- `conversation`: request/response conversation logs toggle
+- `dir`: log directory
+- `maxQueueSize`: async log queue max length (entries are dropped beyond this)
 
-생성 파일:
+Generated files:
 - `server.log.jsonl`
 - `conversation.log.jsonl`
 
-환경변수로도 제어 가능:
+You can also control logging via env:
 
 ```bash
 PIAI_LOG_ENABLED=true
@@ -135,9 +137,9 @@ PIAI_LOG_CONVERSATION=false
 PIAI_LOG_DIR=./logs
 ```
 
-## HTTP 가드레일
+## HTTP Guardrails
 
-설정 파일의 `http` 섹션으로 요청 바디 크기/타임아웃을 제어할 수 있습니다.
+Control request body size and timeout via the `http` config section.
 
 ```json
 {
@@ -148,25 +150,25 @@ PIAI_LOG_DIR=./logs
 }
 ```
 
-환경변수:
+Env overrides:
 
 ```bash
 PIAI_MAX_BODY_BYTES=1048576
 PIAI_REQUEST_TIMEOUT_MS=30000
 ```
 
-## Claude Code 설정 예시
+## Claude Code Example
 
 ```bash
 export ANTHROPIC_BASE_URL=http://localhost:8787
 export ANTHROPIC_API_KEY=any-value-or-router-key
 ```
 
-`ROUTER_API_KEY`를 설정한 경우에는 `ANTHROPIC_API_KEY` 값을 동일하게 맞추세요.
+If you set `ROUTER_API_KEY`, set `ANTHROPIC_API_KEY` to the same value.
 
-## 모델 치환
+## Model Mapping
 
-`~/.pirouter/config.json` 또는 `MODEL_MAP_JSON` 예시:
+Example in `~/.pirouter/config.json` or `MODEL_MAP_JSON`:
 
 ```json
 {
@@ -195,16 +197,16 @@ export ANTHROPIC_API_KEY=any-value-or-router-key
 }
 ```
 
-- 요청 `model`이 맵에 있으면 활성 provider 기준으로 치환
-- `provider:model` 키를 쓰면 provider별로 alias 충돌 없이 분리 가능
-- 값을 객체로 주면 `model` + `reasoning`(또는 `effort`) 매핑 가능
-- 입력 effort(`max/high/medium/low`)는 `body.effort` 또는 `thinking.budget_tokens`에서 추정
-- `thinking.budget_tokens` 추정 기준: `<=2048 low`, `<=8192 medium`, `<=24576 high`, 그 이상 `max`
-- 없으면 `default` 매핑 사용
-- 그래도 없으면 요청 모델 그대로 사용
-- 요청 모델이 비어 있으면 `PI_MODEL` 사용
+- If incoming `model` matches a mapping key, it is remapped for the active provider.
+- `provider:model` keys help avoid alias collisions across providers.
+- Object values support `model` plus `reasoning` (or `effort`) mapping.
+- Input effort (`max/high/medium/low`) comes from `body.effort` or inferred from `thinking.budget_tokens`.
+- `thinking.budget_tokens` thresholds: `<=2048 low`, `<=8192 medium`, `<=24576 high`, above that `max`.
+- Falls back to `default` mapping when specific mapping is missing.
+- If still missing, original model is used.
+- If request model is empty, `PI_MODEL` is used.
 
-## 테스트
+## Test
 
 ```bash
 pnpm test
