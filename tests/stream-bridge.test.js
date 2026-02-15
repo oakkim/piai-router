@@ -104,3 +104,78 @@ test("convertPiEventToAnthropicSseRecords backfills Task prompt on toolcall_end"
   const parsed = JSON.parse(toolDelta.data.delta.partial_json);
   assert.equal(parsed.prompt, "Continue project analysis");
 });
+
+test("convertPiEventToAnthropicSseRecords maps thinking stream to anthropic thinking deltas", () => {
+  const state = createAnthropicStreamState({ model: "claude-sonnet-4-5", messageId: "msg_thinking" });
+  const events = [
+    { type: "start" },
+    { type: "thinking_start", contentIndex: 0 },
+    { type: "thinking_delta", contentIndex: 0, delta: "step by step" },
+    { type: "thinking_end", contentIndex: 0 },
+    { type: "done", reason: "stop", message: { usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 } } }
+  ];
+
+  const records = events.flatMap((event) => convertPiEventToAnthropicSseRecords(event, state));
+  const starts = records.filter((record) => record.event === "content_block_start");
+  assert.equal(starts.length > 0, true);
+  assert.equal(starts[0].data.content_block.type, "thinking");
+
+  const thinkingDeltas = records
+    .filter(
+      (record) =>
+        record.event === "content_block_delta" &&
+        record.data &&
+        record.data.delta &&
+        record.data.delta.type === "thinking_delta"
+    )
+    .map((record) => record.data.delta.thinking);
+
+  assert.ok(thinkingDeltas.includes("step by step"));
+
+  const signatureDelta = records.find(
+    (record) =>
+      record.event === "content_block_delta" &&
+      record.data &&
+      record.data.delta &&
+      record.data.delta.type === "signature_delta"
+  );
+  assert.ok(signatureDelta);
+  assert.equal(typeof signatureDelta.data.delta.signature, "string");
+});
+
+test("thinking block and text block do not reuse same SSE index", () => {
+  const state = createAnthropicStreamState({ model: "claude-sonnet-4-5", messageId: "msg_idx" });
+  const events = [
+    { type: "start" },
+    { type: "thinking_start", contentIndex: 0 },
+    { type: "thinking_delta", contentIndex: 0, delta: "reasoning" },
+    { type: "thinking_end", contentIndex: 0 },
+    { type: "text_start", contentIndex: 0 },
+    { type: "text_delta", contentIndex: 0, delta: "final answer" },
+    { type: "text_end", contentIndex: 0 }
+  ];
+
+  const records = events.flatMap((event) => convertPiEventToAnthropicSseRecords(event, state));
+  const starts = records
+    .filter((record) => record.event === "content_block_start")
+    .map((record) => record.data.index);
+
+  assert.equal(starts.length >= 2, true);
+  assert.notEqual(starts[0], starts[1]);
+});
+
+test("convertPiEventToAnthropicSseRecords suppresses thinking when configured", () => {
+  const state = createAnthropicStreamState({
+    model: "claude-sonnet-4-5",
+    messageId: "msg_no_thinking",
+    suppressThinking: true
+  });
+  const events = [
+    { type: "thinking_start", contentIndex: 0 },
+    { type: "thinking_delta", contentIndex: 0, delta: "internal" },
+    { type: "thinking_end", contentIndex: 0 }
+  ];
+
+  const records = events.flatMap((event) => convertPiEventToAnthropicSseRecords(event, state));
+  assert.equal(records.length, 0);
+});

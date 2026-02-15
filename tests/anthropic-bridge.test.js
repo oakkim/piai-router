@@ -94,6 +94,66 @@ test("piAssistantToAnthropicMessage backfills Task prompt when missing", () => {
   assert.equal(output.content[0].input.prompt, "Continue project analysis");
 });
 
+test("piAssistantToAnthropicMessage converts thinking blocks to anthropic thinking blocks", () => {
+  const output = piAssistantToAnthropicMessage({
+    requestedModel: "claude-sonnet-4-5",
+    resolvedModel: "gpt-5",
+    message: {
+      stopReason: "stop",
+      usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
+      content: [
+        { type: "thinking", thinking: "internal reasoning" },
+        { type: "text", text: "final answer" }
+      ]
+    }
+  });
+
+  assert.equal(output.content[0].type, "thinking");
+  assert.equal(output.content[0].thinking, "internal reasoning");
+  assert.equal(typeof output.content[0].signature, "string");
+  assert.equal(output.content[0].signature.startsWith("synthetic."), true);
+  assert.equal(output.content[1].type, "text");
+  assert.equal(output.content[1].text, "final answer");
+});
+
+test("piAssistantToAnthropicMessage can suppress thinking blocks", () => {
+  const output = piAssistantToAnthropicMessage({
+    requestedModel: "claude-sonnet-4-5",
+    resolvedModel: "gpt-5",
+    suppressThinking: true,
+    message: {
+      stopReason: "stop",
+      usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
+      content: [
+        { type: "thinking", thinking: "internal reasoning" },
+        { type: "text", text: "{\"ok\":true}" }
+      ]
+    }
+  });
+
+  assert.equal(output.content.length, 1);
+  assert.equal(output.content[0].type, "text");
+  assert.equal(output.content[0].text, "{\"ok\":true}");
+});
+
+test("piAssistantToAnthropicMessage falls back to thinking block for empty error message", () => {
+  const output = piAssistantToAnthropicMessage({
+    requestedModel: "claude-sonnet-4-5",
+    resolvedModel: "gpt-5",
+    message: {
+      stopReason: "error",
+      errorMessage: "Request was aborted",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      content: []
+    }
+  });
+
+  assert.equal(output.content.length, 1);
+  assert.equal(output.content[0].type, "thinking");
+  assert.equal(output.content[0].thinking, "Request was aborted");
+  assert.equal(typeof output.content[0].signature, "string");
+});
+
 test("estimateInputTokensApprox returns positive token estimate", () => {
   const tokens = estimateInputTokensApprox({
     system: "system prompt",

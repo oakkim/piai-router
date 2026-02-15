@@ -10,6 +10,140 @@ import { GatewayHttpError } from "../http-errors.js";
 import { json } from "../response.js";
 import { getUpstreamApiKey } from "../upstream-auth.js";
 
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasVisibleAssistantContent(message) {
+  if (!isRecord(message)) {
+    return false;
+  }
+  const blocks = Array.isArray(message.content) ? message.content : [];
+  return blocks.some((block) => {
+    if (!isRecord(block) || typeof block.type !== "string") {
+      return false;
+    }
+    if (block.type === "text") {
+      return typeof block.text === "string" && block.text.length > 0;
+    }
+    if (block.type === "thinking" || block.type === "reasoning") {
+      if (typeof block.thinking === "string" && block.thinking.length > 0) {
+        return true;
+      }
+      return typeof block.text === "string" && block.text.length > 0;
+    }
+    if (block.type === "toolCall") {
+      return typeof block.name === "string" && block.name.length > 0;
+    }
+    return false;
+  });
+}
+
+function appendDelta(map, index, delta) {
+  if (typeof delta !== "string" || !delta) {
+    return;
+  }
+  const key = Number.isFinite(index) ? index : 0;
+  const prev = map.get(key) || "";
+  map.set(key, prev + delta);
+}
+
+function collectSortedKeys(map) {
+  return [...map.keys()].sort((a, b) => a - b);
+}
+
+function synthesizeContentFromStreamEvents(state) {
+  const content = [];
+
+  for (const idx of collectSortedKeys(state.thinkingByIndex)) {
+    const thinking = state.thinkingByIndex.get(idx) || "";
+    if (thinking) {
+      content.push({ type: "thinking", thinking });
+    }
+  }
+
+  for (const idx of collectSortedKeys(state.textByIndex)) {
+    const text = state.textByIndex.get(idx) || "";
+    if (text) {
+      content.push({ type: "text", text });
+    }
+  }
+
+  for (const idx of collectSortedKeys(state.toolCallByIndex)) {
+    const toolCall = state.toolCallByIndex.get(idx);
+    if (!isRecord(toolCall)) {
+      continue;
+    }
+    const name = typeof toolCall.name === "string" ? toolCall.name : "";
+    if (!name) {
+      continue;
+    }
+    const id = typeof toolCall.id === "string" && toolCall.id ? toolCall.id : `tool_${idx}`;
+    const args = isRecord(toolCall.arguments) ? toolCall.arguments : {};
+    content.push({
+      type: "toolCall",
+      id,
+      name,
+      arguments: args
+    });
+  }
+
+  return content;
+}
+
+async function recoverCompletionFromStream({ runner, streamArgs }) {
+  const stream = await runner.stream(streamArgs);
+  const recoveryState = {
+    thinkingByIndex: new Map(),
+    textByIndex: new Map(),
+    toolCallByIndex: new Map()
+  };
+
+  let finalMessage = null;
+  for await (const event of stream) {
+    if (!isRecord(event)) {
+      continue;
+    }
+
+    const contentIndex = Number(event.contentIndex);
+    if (event.type === "thinking_delta") {
+      appendDelta(recoveryState.thinkingByIndex, contentIndex, event.delta);
+      continue;
+    }
+    if (event.type === "text_delta") {
+      appendDelta(recoveryState.textByIndex, contentIndex, event.delta);
+      continue;
+    }
+    if (event.type === "toolcall_end" && isRecord(event.toolCall)) {
+      const key = Number.isFinite(contentIndex) ? contentIndex : recoveryState.toolCallByIndex.size;
+      recoveryState.toolCallByIndex.set(key, event.toolCall);
+      continue;
+    }
+    if (event.type === "done" && isRecord(event.message)) {
+      finalMessage = event.message;
+      continue;
+    }
+    if (event.type === "error" && isRecord(event.error)) {
+      finalMessage = event.error;
+    }
+  }
+
+  if (hasVisibleAssistantContent(finalMessage)) {
+    return finalMessage;
+  }
+
+  const synthesizedContent = synthesizeContentFromStreamEvents(recoveryState);
+  if (synthesizedContent.length === 0) {
+    return finalMessage;
+  }
+
+  const base = isRecord(finalMessage) ? finalMessage : {};
+  return {
+    ...base,
+    content: synthesizedContent
+  };
+}
+
 function resolveModelForBody(body, config) {
   return resolveModelRoute({
     requestedModel: body?.model,
@@ -19,6 +153,14 @@ function resolveModelForBody(body, config) {
     modelMap: config.modelMap,
     requestBody: body
   });
+}
+
+function shouldSuppressThinking(body) {
+  const formatType = body?.output_config?.format?.type;
+  if (typeof formatType !== "string") {
+    return false;
+  }
+  return formatType.trim().toLowerCase() === "json_schema";
 }
 
 export function createMessagesHandler({ config, runner, logger }) {
@@ -43,6 +185,7 @@ export function createMessagesHandler({ config, runner, logger }) {
     const modelRoute = resolveModelForBody(body, config);
     const resolvedModel = modelRoute.modelId;
     const isStream = body.stream === true;
+    const suppressThinking = shouldSuppressThinking(body);
 
     logger?.conversation("request", {
       requestId,
@@ -57,18 +200,48 @@ export function createMessagesHandler({ config, runner, logger }) {
 
     if (!isStream) {
       try {
-        const completion = await runner.complete({
+        const runArgs = {
           modelId: resolvedModel,
           modelRoute,
           context: contextPayload,
           requestBody: body,
           apiKey: upstreamApiKey
-        });
+        };
+
+        let completion = await runner.complete(runArgs);
+        if (!hasVisibleAssistantContent(completion)) {
+          logger?.conversation("response_warning", {
+            requestId,
+            stream: false,
+            reason: "empty_completion_from_complete",
+            stopReason: typeof completion?.stopReason === "string" ? completion.stopReason : "",
+            errorMessage: typeof completion?.errorMessage === "string" ? completion.errorMessage : ""
+          });
+          const recovered = await recoverCompletionFromStream({
+            runner,
+            streamArgs: runArgs
+          });
+          if (recovered) {
+            completion = recovered;
+          }
+        }
+
+        if (
+          !hasVisibleAssistantContent(completion) &&
+          (completion?.stopReason === "error" || completion?.stopReason === "aborted")
+        ) {
+          const upstreamMessage =
+            typeof completion?.errorMessage === "string" && completion.errorMessage.trim()
+              ? completion.errorMessage.trim()
+              : "Upstream returned empty response";
+          throw new Error(upstreamMessage);
+        }
 
         const responseBody = piAssistantToAnthropicMessage({
           message: completion,
           requestedModel: body.model || resolvedModel,
-          resolvedModel
+          resolvedModel,
+          suppressThinking
         });
 
         json(res, 200, responseBody);
@@ -112,7 +285,8 @@ export function createMessagesHandler({ config, runner, logger }) {
         apiKey: upstreamApiKey
       });
       const streamState = createAnthropicStreamState({
-        model: body.model || resolvedModel
+        model: body.model || resolvedModel,
+        suppressThinking
       });
 
       for await (const event of stream) {
@@ -120,7 +294,8 @@ export function createMessagesHandler({ config, runner, logger }) {
           const responseBody = piAssistantToAnthropicMessage({
             message: event.message,
             requestedModel: body.model || resolvedModel,
-            resolvedModel
+            resolvedModel,
+            suppressThinking
           });
           logger?.conversation("response", {
             requestId,

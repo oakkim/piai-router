@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 const EMPTY_USAGE = {
   input: 0,
   output: 0,
@@ -29,6 +31,24 @@ function normalizeToolCallId(raw) {
     return `tool_${Math.random().toString(36).slice(2, 10)}`;
   }
   return value.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+}
+
+function extractThinkingText(block) {
+  if (!isRecord(block)) {
+    return "";
+  }
+  if (typeof block.thinking === "string") {
+    return block.thinking;
+  }
+  if (typeof block.text === "string") {
+    return block.text;
+  }
+  return "";
+}
+
+function buildThinkingSignature(thinkingText) {
+  const digest = createHash("sha256").update(toText(thinkingText)).digest("base64");
+  return `synthetic.${digest}`;
 }
 
 function normalizeToolArguments(name, rawArguments) {
@@ -193,6 +213,13 @@ export function anthropicRequestToPiContext(body) {
     if (role === "assistant") {
       const assistantBlocks = [];
       for (const block of blocks) {
+        if (block.type === "thinking") {
+          const thinking = toText(block.thinking);
+          if (thinking) {
+            assistantBlocks.push({ type: "thinking", thinking });
+          }
+          continue;
+        }
         if (block.type === "text") {
           assistantBlocks.push({ type: "text", text: toText(block.text) });
           continue;
@@ -299,6 +326,7 @@ export function mapPiStopReasonToAnthropic(stopReason) {
 
 export function piAssistantToAnthropicMessage(params) {
   const message = isRecord(params?.message) ? params.message : {};
+  const suppressThinking = params?.suppressThinking === true;
   const model = toText(params?.requestedModel || params?.resolvedModel || "unknown-model");
   const id = toText(params?.id || `msg_${Date.now().toString(36)}`);
   const content = [];
@@ -306,6 +334,20 @@ export function piAssistantToAnthropicMessage(params) {
   const blocks = Array.isArray(message.content) ? message.content : [];
   for (const block of blocks) {
     if (!isRecord(block)) {
+      continue;
+    }
+    if (block.type === "thinking" || block.type === "reasoning") {
+      if (suppressThinking) {
+        continue;
+      }
+      const thinkingText = extractThinkingText(block);
+      if (thinkingText) {
+        content.push({
+          type: "thinking",
+          thinking: thinkingText,
+          signature: buildThinkingSignature(thinkingText)
+        });
+      }
       continue;
     }
     if (block.type === "text") {
@@ -321,6 +363,20 @@ export function piAssistantToAnthropicMessage(params) {
         input: normalizeToolArguments(name, block.arguments)
       });
     }
+  }
+
+  if (
+    content.length === 0 &&
+    !suppressThinking &&
+    typeof message.errorMessage === "string" &&
+    message.errorMessage.trim()
+  ) {
+    const thinkingText = message.errorMessage.trim();
+    content.push({
+      type: "thinking",
+      thinking: thinkingText,
+      signature: buildThinkingSignature(thinkingText)
+    });
   }
 
   return {
@@ -362,15 +418,33 @@ function ensureMessageStart(state, records) {
   records.push({ event: "message_start", data: buildMessageStartEventData(state) });
 }
 
-function allocateBlockIndex(state, contentIndex) {
-  const existing = state.blockIndexByContentIndex.get(contentIndex);
+function blockKey(channel, contentIndex) {
+  return `${channel}:${contentIndex}`;
+}
+
+function allocateBlockIndex(state, channel, contentIndex) {
+  const normalizedContentIndex = Number.isFinite(contentIndex) ? contentIndex : 0;
+  const key = blockKey(channel, normalizedContentIndex);
+  const existing = state.openBlockIndexByKey.get(key);
   if (typeof existing === "number") {
     return existing;
   }
   const next = state.nextBlockIndex;
   state.nextBlockIndex += 1;
-  state.blockIndexByContentIndex.set(contentIndex, next);
+  state.openBlockIndexByKey.set(key, next);
+  state.keyByBlockIndex.set(next, key);
   return next;
+}
+
+function releaseBlockIndex(state, index) {
+  const key = state.keyByBlockIndex.get(index);
+  if (typeof key === "string") {
+    const linkedIndex = state.openBlockIndexByKey.get(key);
+    if (linkedIndex === index) {
+      state.openBlockIndexByKey.delete(key);
+    }
+  }
+  state.keyByBlockIndex.delete(index);
 }
 
 function readToolCallFromEvent(event) {
@@ -388,12 +462,29 @@ function readToolCallFromEvent(event) {
 
 function closeOpenBlocks(state, records) {
   for (const blockIndex of state.openBlocks) {
+    if (state.thinkingTextByBlockIndex.has(blockIndex)) {
+      const thinking = state.thinkingTextByBlockIndex.get(blockIndex) || "";
+      records.push({
+        event: "content_block_delta",
+        data: {
+          type: "content_block_delta",
+          index: blockIndex,
+          delta: { type: "signature_delta", signature: buildThinkingSignature(thinking) }
+        }
+      });
+      state.thinkingTextByBlockIndex.delete(blockIndex);
+    }
     records.push({
       event: "content_block_stop",
       data: { type: "content_block_stop", index: blockIndex }
     });
+    releaseBlockIndex(state, blockIndex);
   }
   state.openBlocks.clear();
+  state.toolMetaByBlockIndex.clear();
+  state.openBlockIndexByKey.clear();
+  state.keyByBlockIndex.clear();
+  state.pendingTextContentIndexes.clear();
 }
 
 export function createAnthropicStreamState(params) {
@@ -402,12 +493,33 @@ export function createAnthropicStreamState(params) {
   return {
     model,
     messageId,
+    suppressThinking: params?.suppressThinking === true,
     started: false,
     nextBlockIndex: 0,
-    blockIndexByContentIndex: new Map(),
+    openBlockIndexByKey: new Map(),
+    keyByBlockIndex: new Map(),
     openBlocks: new Set(),
-    toolMetaByBlockIndex: new Map()
+    toolMetaByBlockIndex: new Map(),
+    thinkingTextByBlockIndex: new Map(),
+    pendingTextContentIndexes: new Set()
   };
+}
+
+function ensureThinkingBlockOpen(state, records, index) {
+  if (!state.openBlocks.has(index)) {
+    state.openBlocks.add(index);
+    records.push({
+      event: "content_block_start",
+      data: {
+        type: "content_block_start",
+        index,
+        content_block: { type: "thinking", thinking: "" }
+      }
+    });
+  }
+  if (!state.thinkingTextByBlockIndex.has(index)) {
+    state.thinkingTextByBlockIndex.set(index, "");
+  }
 }
 
 export function convertPiEventToAnthropicSseRecords(event, state) {
@@ -417,7 +529,11 @@ export function convertPiEventToAnthropicSseRecords(event, state) {
   }
 
   const kind = event.type;
-  if (kind === "thinking_start" || kind === "thinking_delta" || kind === "thinking_end") {
+
+  if (
+    state?.suppressThinking === true &&
+    (kind === "thinking_start" || kind === "thinking_delta" || kind === "thinking_end")
+  ) {
     return records;
   }
 
@@ -426,24 +542,70 @@ export function convertPiEventToAnthropicSseRecords(event, state) {
     return records;
   }
 
-  if (kind === "text_start") {
+  if (kind === "thinking_start") {
     ensureMessageStart(state, records);
-    const index = allocateBlockIndex(state, Number(event.contentIndex) || 0);
-    state.openBlocks.add(index);
+    const index = allocateBlockIndex(state, "thinking", Number(event.contentIndex) || 0);
+    ensureThinkingBlockOpen(state, records, index);
+    return records;
+  }
+
+  if (kind === "thinking_delta") {
+    ensureMessageStart(state, records);
+    const index = allocateBlockIndex(state, "thinking", Number(event.contentIndex) || 0);
+    ensureThinkingBlockOpen(state, records, index);
+    const currentThinking = state.thinkingTextByBlockIndex.get(index) || "";
+    const nextThinking = currentThinking + toText(event.delta);
+    state.thinkingTextByBlockIndex.set(index, nextThinking);
     records.push({
-      event: "content_block_start",
+      event: "content_block_delta",
       data: {
-        type: "content_block_start",
+        type: "content_block_delta",
         index,
-        content_block: { type: "text", text: "" }
+        delta: { type: "thinking_delta", thinking: toText(event.delta) }
       }
     });
     return records;
   }
 
+  if (kind === "thinking_end") {
+    ensureMessageStart(state, records);
+    const contentIndex = Number(event.contentIndex) || 0;
+    const index = allocateBlockIndex(state, "thinking", contentIndex);
+    if (!state.openBlocks.has(index) && !state.thinkingTextByBlockIndex.has(index)) {
+      releaseBlockIndex(state, index);
+      return records;
+    }
+    ensureThinkingBlockOpen(state, records, index);
+    const thinking = state.thinkingTextByBlockIndex.get(index) || "";
+    records.push({
+      event: "content_block_delta",
+      data: {
+        type: "content_block_delta",
+        index,
+        delta: { type: "signature_delta", signature: buildThinkingSignature(thinking) }
+      }
+    });
+    state.thinkingTextByBlockIndex.delete(index);
+    state.openBlocks.delete(index);
+    releaseBlockIndex(state, index);
+    records.push({
+      event: "content_block_stop",
+      data: { type: "content_block_stop", index }
+    });
+    return records;
+  }
+
+  if (kind === "text_start") {
+    const contentIndex = Number(event.contentIndex) || 0;
+    state.pendingTextContentIndexes.add(contentIndex);
+    return records;
+  }
+
   if (kind === "text_delta") {
     ensureMessageStart(state, records);
-    const index = allocateBlockIndex(state, Number(event.contentIndex) || 0);
+    const contentIndex = Number(event.contentIndex) || 0;
+    const index = allocateBlockIndex(state, "text", contentIndex);
+    state.pendingTextContentIndexes.delete(contentIndex);
     if (!state.openBlocks.has(index)) {
       state.openBlocks.add(index);
       records.push({
@@ -468,9 +630,16 @@ export function convertPiEventToAnthropicSseRecords(event, state) {
 
   if (kind === "text_end") {
     ensureMessageStart(state, records);
-    const index = allocateBlockIndex(state, Number(event.contentIndex) || 0);
+    const contentIndex = Number(event.contentIndex) || 0;
+    const index = allocateBlockIndex(state, "text", contentIndex);
+    if (!state.openBlocks.has(index)) {
+      state.pendingTextContentIndexes.delete(contentIndex);
+      releaseBlockIndex(state, index);
+      return records;
+    }
     if (state.openBlocks.has(index)) {
       state.openBlocks.delete(index);
+      releaseBlockIndex(state, index);
       records.push({
         event: "content_block_stop",
         data: { type: "content_block_stop", index }
@@ -482,7 +651,7 @@ export function convertPiEventToAnthropicSseRecords(event, state) {
   if (kind === "toolcall_start") {
     ensureMessageStart(state, records);
     const contentIndex = Number(event.contentIndex) || 0;
-    const index = allocateBlockIndex(state, contentIndex);
+    const index = allocateBlockIndex(state, "tool", contentIndex);
     const toolCall = readToolCallFromEvent(event);
     const name = toText(toolCall?.name || "tool");
     const id = normalizeToolCallId(toolCall?.id);
@@ -507,7 +676,7 @@ export function convertPiEventToAnthropicSseRecords(event, state) {
   if (kind === "toolcall_delta") {
     ensureMessageStart(state, records);
     const contentIndex = Number(event.contentIndex) || 0;
-    const index = allocateBlockIndex(state, contentIndex);
+    const index = allocateBlockIndex(state, "tool", contentIndex);
     const toolCall = readToolCallFromEvent(event);
     const knownMeta = state.toolMetaByBlockIndex.get(index);
     const name = toText(toolCall?.name || knownMeta?.name || "tool");
@@ -537,7 +706,7 @@ export function convertPiEventToAnthropicSseRecords(event, state) {
   if (kind === "toolcall_end") {
     ensureMessageStart(state, records);
     const contentIndex = Number(event.contentIndex) || 0;
-    const index = allocateBlockIndex(state, contentIndex);
+    const index = allocateBlockIndex(state, "tool", contentIndex);
     const toolCall = readToolCallFromEvent(event);
     const knownMeta = state.toolMetaByBlockIndex.get(index);
     const name = toText(toolCall?.name || knownMeta?.name || "tool");
@@ -570,6 +739,7 @@ export function convertPiEventToAnthropicSseRecords(event, state) {
     });
     state.openBlocks.delete(index);
     state.toolMetaByBlockIndex.delete(index);
+    releaseBlockIndex(state, index);
     records.push({
       event: "content_block_stop",
       data: { type: "content_block_stop", index }
