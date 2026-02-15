@@ -94,6 +94,38 @@ test("piAssistantToAnthropicMessage backfills Task prompt when missing", () => {
   assert.equal(output.content[0].input.prompt, "Continue project analysis");
 });
 
+test("piAssistantToAnthropicMessage recovers malformed tool JSON with raw newlines", () => {
+  const malformedArgs =
+    "{\n" +
+    "\"file_path\":\"/tmp/README.ko.md\",\n" +
+    "\"old_string\":\"첫 줄\n둘째 줄\",\n" +
+    "\"new_string\":\"교체\"\n" +
+    "}";
+
+  const output = piAssistantToAnthropicMessage({
+    requestedModel: "claude-sonnet-4-5",
+    resolvedModel: "gpt-5",
+    message: {
+      stopReason: "toolUse",
+      usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
+      content: [
+        {
+          type: "toolCall",
+          id: "call-edit-1",
+          name: "Edit",
+          arguments: malformedArgs
+        }
+      ]
+    }
+  });
+
+  assert.equal(output.content[0].type, "tool_use");
+  assert.equal(output.content[0].name, "Edit");
+  assert.equal(output.content[0].input.file_path, "/tmp/README.ko.md");
+  assert.equal(output.content[0].input.old_string, "첫 줄\n둘째 줄");
+  assert.equal(output.content[0].input.new_string, "교체");
+});
+
 test("piAssistantToAnthropicMessage converts thinking blocks to anthropic thinking blocks", () => {
   const output = piAssistantToAnthropicMessage({
     requestedModel: "claude-sonnet-4-5",

@@ -2,7 +2,9 @@
 
 English | [한국어](./README.ko.md)
 
-A lightweight gateway/router that provides Claude API (`Anthropic Messages`) compatible endpoints backed by `@mariozechner/pi-ai`.
+A lightweight Anthropic-compatible gateway powered by `@mariozechner/pi-ai`.
+
+**Why people use this:** keep the Claude Code developer experience (tooling, slash commands, workflows) while routing requests through Codex/OAuth-backed providers.
 
 ## Key Features
 
@@ -10,34 +12,62 @@ A lightweight gateway/router that provides Claude API (`Anthropic Messages`) com
 - `POST /v1/messages/count_tokens` (approximate)
 - `GET /v1/models`
 - Provider-specific model mapping (`MODEL_MAP_JSON`, `MODEL_MAP_FILE`, `provider:model` prefix support)
+- One-command Claude Code launch with router env (`pirouter code`)
+- OAuth login helper for Codex and other providers (`pirouter login <provider>`)
 - HTTP engine selection: default `node`, optional `fastify` (`PIAI_HTTP_ENGINE=fastify`)
 - Request guardrails: `http.maxBodyBytes`, `http.requestTimeoutMs`
 
 ## Install
 
+### Global CLI install (recommended)
+
+```bash
+npm i -g @anthropic-ai/claude-code piai-router
+```
+
+This gives you:
+- `claude` (Claude Code CLI)
+- `pirouter` (Anthropic-compatible local gateway)
+
+### Local development install
+
 ```bash
 pnpm install
 ```
 
-## Getting Started
+## Getting Started (Codex OAuth + Claude Code)
 
-### 1) Create config interactively
+### 1) Login once with OAuth (Codex example)
 
 ```bash
-pnpm pirouter ui
+pirouter login openai-codex
+```
+
+### 2) Create config interactively
+
+```bash
+pirouter ui
 ```
 
 This creates `~/.pirouter/config.json` with your provider/auth settings.
 
-### 2) Start the router
+### 3) Start the router
 
 ```bash
-pnpm pirouter start
+pirouter start
 ```
 
 By default, it listens on `http://localhost:8787`.
 
-### 3) Point Claude-compatible clients
+### 4) Launch Claude Code with router env auto-applied
+
+```bash
+pirouter code
+```
+
+This runs `claude code` with `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` automatically applied.
+
+### 5) (Optional) Point Claude-compatible clients manually
 
 ```bash
 export ANTHROPIC_BASE_URL=http://localhost:8787
@@ -47,20 +77,12 @@ export ANTHROPIC_API_KEY=any-value-or-router-key
 Or print these commands from your config:
 
 ```bash
-pnpm pirouter env
+pirouter env
 ```
 
 If you set `ROUTER_API_KEY`, use the same value for `ANTHROPIC_API_KEY`.
 
-### 4) Launch Claude Code directly (optional)
-
-```bash
-pnpm pirouter code
-```
-
-This runs `claude code` with `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` automatically applied.
-
-### 5) Quick health check
+### 6) Quick health check
 
 ```bash
 curl -s http://localhost:8787/health

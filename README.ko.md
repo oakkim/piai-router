@@ -2,50 +2,94 @@
 
 `@mariozechner/pi-ai`를 백엔드로 사용해 Claude API(`Anthropic Messages`) 호환 엔드포인트를 제공하는 경량 게이트웨이입니다.
 
+**이 프로젝트를 쓰는 이유:** Claude Code의 익숙한 UX/워크플로우는 그대로 유지하면서, 실제 모델 호출은 Codex/OAuth 기반 provider로 라우팅할 수 있습니다.
+
 ## 핵심 기능
 
 - `POST /v1/messages` (stream / non-stream)
 - `POST /v1/messages/count_tokens` (근사치)
 - `GET /v1/models`
 - provider별 모델 치환 (`MODEL_MAP_JSON`, `MODEL_MAP_FILE`, `provider:model` prefix 지원)
+- Claude Code를 라우터 환경으로 즉시 실행 (`pirouter code`)
+- Codex 등 OAuth 로그인 도우미 (`pirouter login <provider>`)
 - HTTP 엔진 선택: 기본 `node`, 옵션 `fastify` (`PIAI_HTTP_ENGINE=fastify`)
 - 요청 가드레일: `http.maxBodyBytes`, `http.requestTimeoutMs`
 
 ## 설치
 
+### 글로벌 CLI 설치 (권장)
+
+```bash
+npm i -g @anthropic-ai/claude-code piai-router
+```
+
+설치 후 바로 사용할 수 있습니다:
+- `claude` (Claude Code CLI)
+- `pirouter` (Anthropic 호환 로컬 게이트웨이)
+
+### 로컬 개발 설치
+
 ```bash
 pnpm install
 ```
 
-## CLI UI 설정
+## Getting Started (Codex OAuth + Claude Code)
+
+### 1) OAuth 로그인 (Codex 예시)
+
+```bash
+pirouter login openai-codex
+```
+
+### 2) 인터랙티브 설정 생성
+
+```bash
+pirouter ui
+```
 
 기본 설정 파일은 `~/.pirouter/config.json` 입니다.
 
+### 3) 라우터 시작
+
 ```bash
-# 인터랙티브 UI
-pnpm pirouter ui
-
-# 설정 확인
-pnpm pirouter show
-
-# 서버 실행
-pnpm pirouter start
-
-# OAuth 로그인 (예: codex)
-pnpm pirouter login openai-codex
-
-# Claude 호환 클라이언트용 export 출력
-pnpm pirouter env
-
-# 환경변수를 자동 적용해 Claude Code 실행
-pnpm pirouter code
+pirouter start
 ```
 
-글로벌로 `pirouter ui` 형태로 쓰려면:
+기본 주소는 `http://localhost:8787` 입니다.
+
+### 4) Claude Code를 라우터 환경으로 실행
 
 ```bash
-pnpm link --global
-pirouter ui
+pirouter code
+```
+
+이 명령은 `ANTHROPIC_BASE_URL`과 `ANTHROPIC_API_KEY`를 자동 적용해 `claude code`를 실행합니다.
+
+### 5) (선택) Claude 호환 클라이언트 수동 연결
+
+```bash
+export ANTHROPIC_BASE_URL=http://localhost:8787
+export ANTHROPIC_API_KEY=any-value-or-router-key
+```
+
+또는 현재 설정 기준 export를 출력:
+
+```bash
+pirouter env
+```
+
+`ROUTER_API_KEY`를 설정한 경우 `ANTHROPIC_API_KEY`와 동일하게 맞추세요.
+
+### 6) 헬스체크
+
+```bash
+curl -s http://localhost:8787/health
+```
+
+예상 응답:
+
+```json
+{"ok":true}
 ```
 
 ## 실행

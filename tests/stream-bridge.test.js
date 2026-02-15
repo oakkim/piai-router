@@ -105,6 +105,50 @@ test("convertPiEventToAnthropicSseRecords backfills Task prompt on toolcall_end"
   assert.equal(parsed.prompt, "Continue project analysis");
 });
 
+test("convertPiEventToAnthropicSseRecords recovers malformed JSON string args on toolcall_end", () => {
+  const state = createAnthropicStreamState({ model: "claude-sonnet-4-5", messageId: "msg_edit" });
+  const events = [
+    { type: "start" },
+    {
+      type: "toolcall_start",
+      contentIndex: 0,
+      partial: {
+        content: [{ type: "toolCall", id: "call_edit_1", name: "Edit", arguments: {} }]
+      }
+    },
+    {
+      type: "toolcall_end",
+      contentIndex: 0,
+      toolCall: {
+        type: "toolCall",
+        id: "call_edit_1",
+        name: "Edit",
+        arguments:
+          "{\n" +
+          "\"file_path\":\"/tmp/README.ko.md\",\n" +
+          "\"old_string\":\"첫 줄\n둘째 줄\",\n" +
+          "\"new_string\":\"교체\"\n" +
+          "}"
+      }
+    }
+  ];
+
+  const records = events.flatMap((event) => convertPiEventToAnthropicSseRecords(event, state));
+  const toolDelta = records.find(
+    (record) =>
+      record.event === "content_block_delta" &&
+      record.data &&
+      record.data.delta &&
+      record.data.delta.type === "input_json_delta"
+  );
+
+  assert.ok(toolDelta);
+  const parsed = JSON.parse(toolDelta.data.delta.partial_json);
+  assert.equal(parsed.file_path, "/tmp/README.ko.md");
+  assert.equal(parsed.old_string, "첫 줄\n둘째 줄");
+  assert.equal(parsed.new_string, "교체");
+});
+
 test("convertPiEventToAnthropicSseRecords maps thinking stream to anthropic thinking deltas", () => {
   const state = createAnthropicStreamState({ model: "claude-sonnet-4-5", messageId: "msg_thinking" });
   const events = [

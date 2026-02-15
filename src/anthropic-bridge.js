@@ -56,8 +56,88 @@ function buildThinkingSignature(thinkingText) {
   return `synthetic.${digest}`;
 }
 
+function stripJsonCodeFence(text) {
+  const trimmed = text.trim();
+  const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return match ? match[1] : trimmed;
+}
+
+function escapeControlCharsInsideJsonStrings(text) {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (escaped) {
+      out += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      out += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === "\"") {
+      out += ch;
+      inString = !inString;
+      continue;
+    }
+    if (inString && ch === "\n") {
+      out += "\\n";
+      continue;
+    }
+    if (inString && ch === "\r") {
+      out += "\\r";
+      continue;
+    }
+    if (inString && ch === "\t") {
+      out += "\\t";
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+function parseLooseJsonObject(rawArguments) {
+  if (isRecord(rawArguments)) {
+    return { ...rawArguments };
+  }
+  if (typeof rawArguments !== "string") {
+    return {};
+  }
+
+  const direct = rawArguments.trim();
+  if (!direct) {
+    return {};
+  }
+
+  const attempts = [direct];
+  const unfenced = stripJsonCodeFence(direct);
+  if (unfenced !== direct) {
+    attempts.push(unfenced);
+  }
+  const escapedControls = escapeControlCharsInsideJsonStrings(unfenced);
+  if (escapedControls !== unfenced) {
+    attempts.push(escapedControls);
+  }
+
+  for (const candidate of attempts) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (isRecord(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // Continue attempts.
+    }
+  }
+  return {};
+}
+
 function normalizeToolArguments(name, rawArguments) {
-  const args = isRecord(rawArguments) ? { ...rawArguments } : {};
+  const args = parseLooseJsonObject(rawArguments);
   if (name !== "Task") {
     return args;
   }
