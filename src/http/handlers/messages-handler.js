@@ -272,7 +272,7 @@ export function createMessagesHandler({ config, runner, logger }) {
 
         let completion = await runner.complete(runArgs);
         if (!hasVisibleAssistantContent(completion)) {
-          logger?.conversation("response_warning", {
+          logger?.conversation("recovery_attempt", {
             requestId,
             stream: false,
             reason: "empty_completion_from_complete",
@@ -293,6 +293,16 @@ export function createMessagesHandler({ config, runner, logger }) {
               completion = recovered;
             }
           }
+          logger?.conversation(
+            hasVisibleAssistantContent(completion) ? "recovery_success" : "recovery_failure",
+            {
+              requestId,
+              stream: false,
+              reason: "empty_completion_from_complete",
+              stopReason: typeof completion?.stopReason === "string" ? completion.stopReason : "",
+              errorMessage: typeof completion?.errorMessage === "string" ? completion.errorMessage : ""
+            }
+          );
         }
 
         if (
@@ -303,6 +313,13 @@ export function createMessagesHandler({ config, runner, logger }) {
             typeof completion?.errorMessage === "string" && completion.errorMessage.trim()
               ? completion.errorMessage.trim()
               : "Upstream returned empty response";
+          logger?.conversation("recovery_failure", {
+            requestId,
+            stream: false,
+            reason: "error_or_aborted_after_recovery",
+            stopReason: typeof completion?.stopReason === "string" ? completion.stopReason : "",
+            errorMessage: upstreamMessage
+          });
           throw new Error(upstreamMessage);
         }
 

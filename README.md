@@ -196,6 +196,12 @@ PIAI_LOG_CONVERSATION=false
 PIAI_LOG_DIR=~/.pirouter/logs
 ```
 
+## Runtime behavior and operator notes
+
+- **Non-stream recovery path**: When a non-stream `complete` call returns no visible assistant content, the router attempts to recover by replaying the request through the streaming path and synthesizing content from stream events. It emits structured telemetry events `recovery_attempt`, `recovery_success`, and `recovery_failure` (conversation logs) for visibility. If upstream still returns an error/aborted state with no content, the request fails with a 502.
+- **Thinking suppression**: If `output_config.format.type` is set to `json_schema` (case-insensitive), thinking/reasoning blocks are omitted from responses (including streams) to keep output schema-friendly. Synthetic thinking signatures are not emitted when thinking is suppressed.
+- **Synthetic thinking signatures**: When thinking blocks are emitted, each block includes a deterministic `synthetic.<sha256 base64>` signature derived from its thinking text. This aids observability/deduplication but is not a cryptographic attestation; any change to the thinking text changes the signature. Suppressing thinking omits these signatures.
+
 ## HTTP Guardrails
 
 Control request body size and timeout via the `http` config section.

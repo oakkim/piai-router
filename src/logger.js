@@ -54,14 +54,20 @@ export function createGatewayLogger(config) {
     if (!logging.serverEnabled) {
       return;
     }
-    safeWrite(serverFile, { ts: nowIso(), event, ...data });
+    const payload = isRecord(data) ? { ...data } : {};
+    delete payload.event;
+    delete payload.ts;
+    safeWrite(serverFile, { ts: nowIso(), event, ...payload });
   };
 
   const conversation = (event, data = {}) => {
     if (!logging.conversationEnabled) {
       return;
     }
-    safeWrite(conversationFile, { ts: nowIso(), event, ...data });
+    const payload = isRecord(data) ? { ...data } : {};
+    delete payload.event;
+    delete payload.ts;
+    safeWrite(conversationFile, { ts: nowIso(), event, ...payload });
   };
 
   const flush = async () => {
