@@ -13,7 +13,8 @@ function buildModel(config, modelId) {
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: config.upstream.contextWindow,
     maxTokens: config.upstream.maxTokens,
-    headers: config.upstream.headers
+    headers: config.upstream.headers,
+    compat: config.upstream.compat
   };
 }
 

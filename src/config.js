@@ -35,6 +35,7 @@ function defaultProviderConfig(providerId = DEFAULT_PROVIDER) {
     contextWindow: 128000,
     maxTokens: 128000,
     headers: {},
+    compat: {},
   };
 }
 
@@ -161,6 +162,9 @@ function mergeProviderConfig(target, candidate, fallbackProvider) {
   target.maxTokens = parseNumber(candidate.maxTokens, target.maxTokens);
   if (isRecord(candidate.headers)) {
     target.headers = { ...target.headers, ...candidate.headers };
+  }
+  if (isRecord(candidate.compat)) {
+    target.compat = { ...target.compat, ...candidate.compat };
   }
   target.provider =
     normalizeProviderId(target.provider) ||
@@ -369,6 +373,12 @@ function mergeConfigWithEnv(config, env) {
       env.PI_HEADERS_JSON,
       providerConfig.headers,
     );
+  }
+  if (env.PI_COMPAT_JSON !== undefined) {
+    const compat = parseJson(env.PI_COMPAT_JSON, providerConfig.compat);
+    if (isRecord(compat)) {
+      providerConfig.compat = compat;
+    }
   }
   providerConfig.provider = providerId;
   if (!providerConfig.oauthProvider) {

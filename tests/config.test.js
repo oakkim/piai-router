@@ -37,7 +37,10 @@ test("loadConfig reads config file defaults", () => {
         authFile: "./piai-auth.json",
         baseUrl: "https://api.openai.com/v1",
         defaultModel: "gpt-5-mini",
-        apiKey: "upstream-token"
+        apiKey: "upstream-token",
+        compat: {
+          supportsStore: false
+        }
       }
     }
   });
@@ -58,9 +61,11 @@ test("loadConfig reads config file defaults", () => {
   assert.equal(config.upstream.api, "openai-responses");
   assert.equal(config.upstream.authMode, "oauth");
   assert.equal(config.upstream.oauthProvider, "openai-codex");
+  assert.equal(config.providers.openai.compat.supportsStore, false);
   assert.equal(config.upstream.authFile, "./piai-auth.json");
   assert.equal(config.upstream.defaultModel, "gpt-5-mini");
   assert.equal(config.upstream.apiKey, "upstream-token");
+  assert.equal(config.upstream.compat.supportsStore, false);
 });
 
 test("loadConfig lets environment override file config", () => {
@@ -85,6 +90,7 @@ test("loadConfig lets environment override file config", () => {
       PIAI_AUTH_MODE: "oauth",
       PIAI_OAUTH_PROVIDER: "anthropic",
       PIAI_AUTH_FILE: "./oauth-auth.json",
+      PI_COMPAT_JSON: JSON.stringify({ requiresToolResultName: true }),
       PIAI_LOG_ENABLED: "true",
       PIAI_LOG_SERVER: "false",
       PIAI_LOG_CONVERSATION: "true",
@@ -105,6 +111,7 @@ test("loadConfig lets environment override file config", () => {
   assert.equal(config.upstream.authMode, "oauth");
   assert.equal(config.upstream.oauthProvider, "anthropic");
   assert.equal(config.upstream.authFile, "./oauth-auth.json");
+  assert.equal(config.upstream.compat.requiresToolResultName, true);
   assert.equal(config.logging.enabled, true);
   assert.equal(config.logging.server, false);
   assert.equal(config.logging.conversation, true);

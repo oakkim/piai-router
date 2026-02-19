@@ -43,3 +43,28 @@ test("buildRunOptions keeps temperature for non-codex APIs", () => {
 
   assert.equal(options.temperature, 0.7);
 });
+
+test("buildModel passes compat config to pi-ai model", () => {
+  const model = _internal.buildModel(
+    {
+      upstream: {
+        api: "openai-completions",
+        provider: "custom-openai",
+        baseUrl: "http://localhost:11434/v1",
+        reasoning: false,
+        input: ["text"],
+        contextWindow: 32000,
+        maxTokens: 8000,
+        headers: {},
+        compat: {
+          supportsStore: false,
+          maxTokensField: "max_tokens"
+        }
+      }
+    },
+    "llama-3.1-8b"
+  );
+
+  assert.equal(model.compat.supportsStore, false);
+  assert.equal(model.compat.maxTokensField, "max_tokens");
+});

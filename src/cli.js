@@ -64,6 +64,7 @@ function normalizeProviderConfigShape(input, providerId) {
         ? source.maxTokens
         : 128000,
     headers: isRecord(source.headers) ? source.headers : {},
+    compat: isRecord(source.compat) ? source.compat : {},
   };
 }
 
